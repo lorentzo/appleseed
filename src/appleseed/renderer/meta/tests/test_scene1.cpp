@@ -3,7 +3,7 @@
 
 #include "renderer/kernel/intersection/intersectionsettings.h" // ?
 
-#include "renderer/modeling/object/object.h" //?
+#include "renderer/modeling/object/object.h"
 #include "renderer/modeling/object/curveobject.h"
 #include "renderer/modeling/scene/objectinstance.h"
 
@@ -87,9 +87,9 @@ TEST_SUITE(Koji_Bezier)
         curve_object->push_curve1(
             Curve1Type(
                 ControlPoints, 
-                GSscalar(0.1), 
-                GSscalar(1.0), 
-                color3f(0.2f, 0.0f, 0.7f)
+                GScalar(0.1), 
+                GScalar(1.0), 
+                Color3f(0.2f, 0.0f, 0.7f)
             )
         );
 
@@ -108,13 +108,13 @@ TEST_SUITE(Koji_Bezier)
         auto_release_ptr<AssemblyInstance> assembly_instance(
             AssemblyInstanceFactory::create(
                 "assembly_inst",
-                paramArray(),
+                ParamArray(),
                 "assembly"
             )
         );
 
         // add object to assembly
-        assembly->objects().insert(curve_object);
+        assembly->objects().insert(auto_release_ptr<Object>(curve_object));
 
         // add object instance to assembly
         assembly->object_instances().insert(curve_instance);
