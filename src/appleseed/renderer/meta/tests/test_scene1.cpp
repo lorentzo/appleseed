@@ -181,7 +181,7 @@ TEST_SUITE(Koji_Bezier)
         m_project->set_frame(frame);
 
         // add base config
-        m_project->add_base_configurations();
+        m_project->add_default_configurations();
         
         // add paths to the project
         m_project->set_path((m_out_dir / "project.appleseed").string().c_str());
