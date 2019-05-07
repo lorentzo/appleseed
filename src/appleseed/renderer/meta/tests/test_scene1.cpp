@@ -27,12 +27,21 @@
 
 #include "renderer/modeling/project/configuration.h"
 
+#include "renderer/kernel/intersection/intersector.h"
+#include "renderer/kernel/intersection/tracecontext.h"
+#include "renderer/kernel/texturing/texturecache.h"
+#include "renderer/kernel/texturing/texturestore.h"
+#include "renderer/kernel/shading/shadingpoint.h"
+#include "renderer/kernel/shading/shadingray.h"
+
 
 // appleseed.foundation headers.
 #include "foundation/platform/thread.h" // ?
 #include "foundation/utility/test.h"
 #include "foundation/utility/autoreleaseptr.h"
 #include "foundation/utility/searchpaths.h"
+#include "foundation/utility/statistics.h"
+#include "foundation/utility/string.h"
 
 // Boost headers.
 #include "boost/filesystem/operations.hpp" //?
@@ -186,6 +195,34 @@ TEST_SUITE(Koji_Bezier)
         // add paths to the project
         m_project->set_path((m_out_dir / "project.appleseed").string().c_str());
         m_project->search_paths().set_root_path(m_out_dir.string());
+
+
+        // intersector
+        TraceContext m_trace_context(scene);
+        TextureStore m_texture_store(scene);
+        TextureCache m_texture_cache(m_texture_store);
+        Intersector m_intersector(m_trace_context, m_texture_cache);
+
+        // shading ray
+        const ShadingRay ray(
+            Vector3d(0.0, 0.0, 2.0),  // origin
+            Vector3d(0.0, 0.0, -1.0), // destination
+            0.0,        // tmin
+            2.0,        // tmax
+            ShadingRay::Time(), //?
+            VisibilityFlags::CameraRay, //?
+            0
+        );
+
+        ShadingPoint shading_point;
+
+        m_intersector.trace(ray, shading_point);
+
+        StatisticsVector statistic_vector = m_intersector.get_statistics();
+
+        string statistics = statistic_vector.to_string().c_str();
+
+        EXPECT_EQ("Statistics", statistics);
 
         // save project
         ProjectFileWriter::write(
