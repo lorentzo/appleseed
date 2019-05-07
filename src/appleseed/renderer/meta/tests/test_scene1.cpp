@@ -18,6 +18,15 @@
 
 #include "renderer/utility/paramarray.h"
 
+#include "renderer/modeling/camera/camera.h"
+#include "renderer/modeling/camera/pinholecamera.h"
+
+#include "renderer/modeling/frame/frame.h"
+
+#include "renderer/modeling/environment/environment.h"
+
+#include "renderer/modeling/project/configuration.h"
+
 
 // appleseed.foundation headers.
 #include "foundation/platform/thread.h" // ?
@@ -78,18 +87,20 @@ TEST_SUITE(Koji_Bezier)
 
         // where is gvector3 defined?
         static const GVector3 ControlPoints[] = {
-            GVector3(0.0, 0.0, 0.0), 
-            GVector3(0.0, 1.0, 0.0)
+            GVector3(0.0, 2.0, 4000.0), 
+            GVector3(0.0, 1.0, 2000.0),
+            GVector3(0.0, -1.0, 1000.0),
+            GVector3(0.0, -2.0, 0.0)
         };
 
-        curve_object->push_basis(CurveBasis::Linear);
+        curve_object->push_basis(CurveBasis::Bezier);
 
-        curve_object->push_curve1(
-            Curve1Type(
-                ControlPoints, 
-                GScalar(0.1), 
-                GScalar(1.0), 
-                Color3f(0.2f, 0.0f, 0.7f)
+        curve_object->push_curve3(
+            Curve3Type(
+                ControlPoints, // control points
+                GScalar(0.05),  // width
+                GScalar(1.0),  // opacity
+                Color3f(0.2f, 0.4f, 0.7f) // color
             )
         );
 
@@ -113,6 +124,38 @@ TEST_SUITE(Koji_Bezier)
             )
         );
 
+        // create camera
+        auto_release_ptr<Camera> camera(
+            PinholeCameraFactory().create(
+                "camera",
+                ParamArray()
+                    .insert("film_width", "0.025")
+                    .insert("film_height", "0.025")
+                    .insert("focal_length", "0.035")
+            )
+        ); // transformations?
+
+        // add frame definition
+        auto_release_ptr<Frame> frame(
+            FrameFactory::create(
+                "beauty", // name
+                ParamArray()
+                    .insert("resolution", "1024 768")
+                    .insert("camera", "camera")
+            )
+
+        );
+
+        // environment definition
+        auto_release_ptr<Environment> environment(
+            EnvironmentFactory::create(
+                "default", // name
+                ParamArray()
+            )
+
+        );
+
+
         // add object to assembly
         assembly->objects().insert(auto_release_ptr<Object>(curve_object));
 
@@ -125,9 +168,21 @@ TEST_SUITE(Koji_Bezier)
         // add assembly instance to the scene
         scene->assembly_instances().insert(assembly_instance);
 
+        // add camera to the scene
+        scene->cameras().insert(camera);
+
+        // add environment to the scene
+        scene->set_environment(environment);
+
         // add scene to the project
         m_project->set_scene(scene);
 
+        // add frame to the project
+        m_project->set_frame(frame);
+
+        // add base config
+        m_project->add_base_configurations();
+        
         // add paths to the project
         m_project->set_path((m_out_dir / "project.appleseed").string().c_str());
         m_project->search_paths().set_root_path(m_out_dir.string());
