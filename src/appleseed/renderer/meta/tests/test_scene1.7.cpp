@@ -60,10 +60,10 @@ using namespace renderer;
 using namespace std;
 
 
-TEST_SUITE(Koji_Bezier)
+TEST_SUITE(Koji_Bezier7)
 {
 
-    TEST_CASE(my_curve){
+    TEST_CASE(my_curve7){
 
         // output path for project
         // boost::filesystem::absolute(path)
@@ -224,10 +224,12 @@ TEST_SUITE(Koji_Bezier)
         TraceContext m_trace_context(scene_ref);
         TextureStore m_texture_store(scene_ref);
         TextureCache m_texture_cache(m_texture_store);
+	
         Intersector m_intersector(m_trace_context, m_texture_cache);
-
+	
         m_trace_context.update();
-
+	
+	
         // shading ray
         const ShadingRay ray(
             Vector3d(0.0, 0.0, 0.0),  // origin
@@ -243,11 +245,14 @@ TEST_SUITE(Koji_Bezier)
 
         m_intersector.trace(ray, shading_point);
 
+	/*
+
         StatisticsVector statistic_vector = m_intersector.get_statistics();
 
         string statistics = statistic_vector.to_string().c_str();
 
         EXPECT_EQ("Statistics", statistics);
+	*/
 
         // save project
         ProjectFileWriter::write(
