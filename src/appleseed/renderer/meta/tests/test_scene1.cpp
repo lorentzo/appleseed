@@ -76,7 +76,7 @@ TEST_SUITE(Koji_Bezier)
         create_directory(m_out_dir);
 
         // crate project.
-        auto_release_ptr<Project> m_project = ProjectFactory::create("project");
+        auto_release_ptr<Project> m_project(ProjectFactory::create("project"));
         
         // create scene.
         auto_release_ptr<Scene> scene(SceneFactory::create());
@@ -90,7 +90,11 @@ TEST_SUITE(Koji_Bezier)
         );
 
 	// create texture
-	//auto_release_ptr<Texture> m_texture = new Texture("texture", ParamArray());
+	//auto_release_ptr<Texture> m_texture(
+	//	new Texture(
+	//		"texture", 
+	//		ParamArray())
+	//);
 
 	// texture instance
 	auto_release_ptr<TextureInstance> m_texture_instance(
@@ -218,11 +222,10 @@ TEST_SUITE(Koji_Bezier)
         m_project->set_path((m_out_dir / "project.appleseed").string().c_str());
         m_project->search_paths().set_root_path(m_out_dir.string());
 
-
+	/*
         // intersector
-        Scene& scene_ref = scene.ref();
-        TraceContext m_trace_context(scene_ref);
-        TextureStore m_texture_store(scene_ref);
+        TraceContext m_trace_context(scene.ref());
+        TextureStore m_texture_store(scene.ref());
         TextureCache m_texture_cache(m_texture_store);
         Intersector m_intersector(m_trace_context, m_texture_cache);
 
@@ -248,6 +251,7 @@ TEST_SUITE(Koji_Bezier)
         string statistics = statistic_vector.to_string().c_str();
 
         EXPECT_EQ("Statistics", statistics);
+	*/
 
         // save project
         ProjectFileWriter::write(

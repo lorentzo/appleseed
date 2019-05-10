@@ -1453,6 +1453,7 @@ set (renderer_meta_tests_sources
     renderer/meta/tests/test_scene1.5.cpp
     renderer/meta/tests/test_scene1.6.cpp
     renderer/meta/tests/test_scene1.7.cpp
+    renderer/meta/tests/test_scene2.cpp
     renderer/meta/tests/test_shaderparamparser.cpp
     renderer/meta/tests/test_shadingresult.cpp
     renderer/meta/tests/test_sphericalcamera.cpp
