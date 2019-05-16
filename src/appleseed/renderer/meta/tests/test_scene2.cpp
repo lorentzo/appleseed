@@ -82,7 +82,7 @@ TEST_SUITE(Intersector)
             // create an curve object.
             auto_release_ptr<CurveObject> curve_object(
                 CurveObjectFactory().create(
-                    "curve_non_uniform_x_y_coordinates", 
+                    "curve_non_uniform_coordinates", 
                     ParamArray()
                 )
             );
@@ -105,9 +105,9 @@ TEST_SUITE(Intersector)
             // Create an instance of the curve object.
             auto_release_ptr<ObjectInstance> curve_instance(
                 ObjectInstanceFactory::create(
-                    "curve_non_uniform_x_y_coordinates_instance",
+                    "curve_non_uniform_coordinates_instance",
                     ParamArray(),
-                    "curve_non_uniform_x_y_coordinates",
+                    "curve_non_uniform_coordinates",
                     Transformd::identity(),
                     StringDictionary()
                 )
@@ -227,12 +227,12 @@ TEST_SUITE(Intersector)
 
         Project& m_project = get_project();
 
-        m_project.set_path((m_out_dir / "project.appleseed").string().c_str());
+        m_project.set_path((m_out_dir / "curve_non_uniform_coordinates_intersecor.appleseed").string().c_str());
         m_project.search_paths().set_root_path(m_out_dir.string());
 
         ProjectFileWriter::write(
             m_project,
-            (m_out_dir / "project.appleseed").string().c_str()
+            (m_out_dir / "curve_non_uniform_coordinates_intersecor.appleseed").string().c_str()
         );
 
 
