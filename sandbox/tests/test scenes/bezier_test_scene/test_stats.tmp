@@ -1,8 +1,0 @@
-intersection statistics:
-  total rays                    1
-  shading rays                  1 (100.0%)
-  probe rays                    0 (0.0%)
-triangle tree access cache statistics:
-  combined                      efficiency 0.0%  accesses 1  hits 0  misses 1
-  stage-0                       efficiency 0.0%  accesses 1  hits 0  misses 1
-  stage-1                       efficiency 0.0%  accesses 1  hits 0  misses 1
