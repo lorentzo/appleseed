@@ -86,7 +86,7 @@ TEST_SUITE(Intersector)
                     ParamArray()
                 )
             );
-            static const GVector3 ControlPoints[] = { // where is gvector3 defined?
+            static const GVector3 ControlPoints[] = {
                 GVector3(0.0, 2.0, 4000.0), 
                 GVector3(0.0, 1.0, 2000.0),
                 GVector3(0.0, -1.0, 1000.0),
@@ -227,12 +227,12 @@ TEST_SUITE(Intersector)
 
         Project& m_project = get_project();
 
-        m_project.set_path((m_out_dir / "curve_non_uniform_coordinates_intersecor.appleseed").string().c_str());
+        m_project.set_path((m_out_dir / "curve_non_uniform_coordinates_intersector.appleseed").string().c_str());
         m_project.search_paths().set_root_path(m_out_dir.string());
 
         ProjectFileWriter::write(
             m_project,
-            (m_out_dir / "curve_non_uniform_coordinates_intersecor.appleseed").string().c_str()
+            (m_out_dir / "curve_non_uniform_coordinates_intersector.appleseed").string().c_str()
         );
 
 
