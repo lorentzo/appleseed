@@ -7,6 +7,7 @@
 #include "renderer/utility/paramarray.h"
 
 // appleseed.foundation headers.
+#include "foundation/platform/thread.h"
 #include "foundation/utility/autoreleaseptr.h"
 #include "foundation/utility/string.h"
 #include "foundation/utility/searchpaths.h"
@@ -86,7 +87,7 @@ TEST_SUITE(PLUGIN)
 		    
 		    // Write the curve file to disk.
 		    const string filepath = (m_out_dir / filename).string();
-		    CurveObjectWriter::write(object, filepath.c_str());
+		    CurveObjectWriter::write(curve_object.ref(), filepath.c_str());
 
 
 		    // Add a file path parameter to the object.
