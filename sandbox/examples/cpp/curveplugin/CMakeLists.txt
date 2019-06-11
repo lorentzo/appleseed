@@ -155,9 +155,14 @@ endif ()
 # Product.
 #--------------------------------------------------------------------------------------------------
 
+add_library(CLI
+	commandlinehandler.cpp
+)
+
 add_executable (curveplugin curveplugin.cpp)
 
 target_link_libraries (curveplugin
+	CLI
     ${APPLESEED_LIBRARIES}
     ${Boost_LIBRARIES}
     ${IMATH_LIBRARIES}
