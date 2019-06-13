@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <vector>
 
 using namespace foundation;
 using namespace renderer;
@@ -80,7 +81,7 @@ auto_release_ptr<Project> build_project(string object_name)
     // from surface given incoming and outcoming direction.
     assembly->bsdfs().insert(
         LambertianBRDFFactory().create(
-            "difusse_yellow_brdf",
+            "diffuse_yellow_brdf",
             ParamArray()
                 .insert("reflectance", "yellow")));
 
@@ -268,6 +269,8 @@ int main(int argc, char* argv[])
     // todo
 
     // Build the project.
+    // TODO: geometry object name will be passed from CLI.
+    // TODO: enable additional project configurations that are red from file or CLI.
     auto_release_ptr<Project> project(build_project("scene.obj"));
 
     // Create the master renderer.
@@ -279,11 +282,36 @@ int main(int argc, char* argv[])
             project->configurations().get_by_name("final")->get_inherited_parameters(),
             resource_search_paths));
 
-    // Render the frame.
-    renderer->render(renderer_controller);
+    // Configure camera positions and orientations.
+    // TODO: positions and orientations should be red from file.
+    int n_states = 2;
+    Vector3d states[][3] = {
+        {Vector3d(5.0, 5.0, 5.0), Vector3d(0.0, 0.0, 0.0), Vector3d(0.0, 1.0, 0.0)}, // origin, target, up
+        {Vector3d(7.0, 7.0, 5.0), Vector3d(0.0, 0.0, 0.0), Vector3d(0.0, 1.0, 0.0)}
+    }; 
 
-    // Save the frame to disk.
-    project->get_frame()->write_main_image("output/test.png");
+    // Perform rendering for existing states.
+    for (int i = 0; i < n_states; ++i){
+
+        // Change the camera position and orientation.
+        project->get_scene()
+                    ->cameras() // entity vector
+                        .get_by_name("camera") 
+                            ->transform_sequence().set_transform(
+                                0.0f,
+                                Transformd::from_local_to_parent( // foundation/math/matrix
+                                    Matrix4d::make_lookat(
+                                        states[i][0], // origin
+                                        states[i][1], // target
+                                        states[i][2]))); // up
+
+        // Render the frame.
+        renderer->render(renderer_controller);
+
+        // Save the frame to disk.
+        string render_file_name = "output/test" + to_string(i) + ".png";
+        project->get_frame()->write_main_image(render_file_name.c_str());
+    }
 
     // Save the project to disk.
     ProjectFileWriter::write(project.ref(), "output/test.appleseed");
