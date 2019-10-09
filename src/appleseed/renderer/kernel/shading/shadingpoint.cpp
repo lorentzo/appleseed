@@ -806,10 +806,13 @@ void ShadingPoint::compute_shading_basis() const
                         Vector3d(m_t0) * static_cast<double>(1.0f - m_bary[0] - m_bary[1])
                       + Vector3d(m_t1) * static_cast<double>(m_bary[0])
                       + Vector3d(m_t2) * static_cast<double>(m_bary[1])))
-            : get_dpdu(0);
+            : m_assembly_instance_transform.vector_to_parent(
+              m_object_instance->get_transform().vector_to_parent(
+                  Vector3d(1.0, 0.0, 0.0)));
+
 
     // Construct an orthonormal basis.
-    const Vector3d t = normalize(cross(tangent, sn));
+    const Vector3d t = safe_normalize(cross(tangent, sn), Vector3d(0.0, 0.0, 1.0));
     const Vector3d s = normalize(cross(sn, t));
     m_shading_basis.build(sn, s, t);
 
