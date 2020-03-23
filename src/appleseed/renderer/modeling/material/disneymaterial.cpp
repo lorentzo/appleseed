@@ -669,6 +669,36 @@ void DisneyMaterial::update_asset_paths(const StringDictionary& mappings)
     }
 }
 
+bool on_render_begin(
+            const Project&          project,
+            const BaseGroup*        parent,
+            OnRenderBeginRecorder&  recorder,
+            IAbortSwitch*           abort_switch)
+{
+    if (!Material::on_render_begin(project, parent, recorder, abort_switch))
+        return false;
+
+    auto_release_ptr<OIIOTextureSystem> texture_system(
+        OIIOTextureSystemFactory::create());
+
+    try
+    {
+        for (const_each<DictionaryDictionary> it = m_params.dictionaries(); it; ++it)
+        {
+            const char* name = it->key();
+            const Dictionary& params = it->value();
+            DisneyMaterialLayer layer(it->key(), it->value());
+            layer.prepare();
+            RENDERER_LOG_WARNING("%s",layer.expression());
+        }
+    }
+    catch (const std::exception& e)     // namespace qualification required
+    {
+        RENDERER_LOG_ERROR("%s%s.", context.get(), e.what());
+        return false;
+    }
+}
+
 bool DisneyMaterial::on_frame_begin(
     const Project&          project,
     const BaseGroup*        parent,
