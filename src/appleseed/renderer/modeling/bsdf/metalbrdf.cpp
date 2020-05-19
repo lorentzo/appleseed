@@ -160,7 +160,15 @@ namespace
             {
                 if (ScatteringMode::has_specular(modes))
                 {
-                    SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
+                    bool use_microfacet_normal_mapping = true;
+                    if(use_microfacet_normal_mapping)
+                    {
+                        sample_microfacet_based_normal_mapping_specular(f, local_geometry, outgoing, sample);
+                    }
+                    else
+                    {
+                        SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
+                    }
                     sample.m_value.m_beauty = sample.m_value.m_glossy;
                 }
 
@@ -228,15 +236,30 @@ namespace
                 values->m_precomputed.m_a,
                 values->m_reflectance_multiplier);
 
-            const float pdf =
-                MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                    alpha_x,
-                    alpha_y,
-                    f,
+            bool use_microfacet_normal_mapping = true;
+            const float pdf;
+            if (use_microfacet_normal_mapping)
+            {
+                pdf = evaluate_microfacet_based_normal_mapping(
                     local_geometry,
                     outgoing,
                     incoming,
-                    value.m_glossy);
+                    value,
+                    alpha_x,
+                    alpha_y,
+                    f);
+            } 
+            else {
+                pdf =
+                    MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                        alpha_x,
+                        alpha_y,
+                        f,
+                        local_geometry,
+                        outgoing,
+                        incoming,
+                        value.m_glossy);
+            }
 
             apply_energy_compensation_factor(
                 values,
@@ -270,14 +293,28 @@ namespace
                 alpha_x,
                 alpha_y);
 
-            const float pdf =
-                MicrofacetBRDFHelper<GGXMDF>::pdf(
-                    alpha_x,
-                    alpha_y,
-                    local_geometry,
-                    outgoing,
-                    incoming);
-
+            const float pdf;
+            bool use_microfacet_normal_mapping = true;
+            if (use_microfacet_normal_mapping)
+            {
+                pdf =
+                    evaluate_pdf_microfacet_based_normal_mapping(
+                        local_geometry,
+                        outgoing,
+                        incoming,
+                        alpha_x,
+                        alpha_y)
+            }
+            else
+            {
+                pdf =
+                    MicrofacetBRDFHelper<GGXMDF>::pdf(
+                        alpha_x,
+                        alpha_y,
+                        local_geometry,
+                        outgoing,
+                        incoming);
+            }
             assert(pdf >= 0.0f);
             return pdf;
         }
@@ -305,6 +342,296 @@ namespace
                 fms += Spectrum(1.0f);
                 value *= fms;
             }
+        }
+
+        static void sample_microfacet_based_normal_mapping_specular(
+            const FresnelConductorSchlickLazanyi f, 
+            const LocalGeometry&                 local_geometry, 
+            const Vector3f&                      outgoing, 
+            BSDFSample&                          sample)
+        {
+            Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
+
+            // Test perturbed_normal for validity.
+            if(cos_theta(perturbed_normal) <= 0 
+                || std::abs(perturbed_normal.x) < 1e-6
+                || std::abs(perturbed_normal.y) < 1e-6)
+            {
+                SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
+                return;
+            }
+
+            // wr = - incoming?
+            Vector3f tangent_world = wt(perturbed_normal);
+            Spectrum value(0.0);
+            // if sampler->next < lambda?
+            
+        }
+
+        static float evaluate_microfacet_based_normal_mapping(
+            const LocalGeometry&                 local_geometry,
+            const Vector3f&                      outgoing,
+            const Vector3f&                      incoming,
+            DirectShadingComponents&             value,
+            float                                alpha_x,
+            float                                alpha_y,
+            const FresnelConductorSchlickLazanyi f)
+        {
+            Spectrum value(0.0);
+            float pdf = 0.0;
+            Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
+
+            // Test perturbed_normal for validity.
+            if(cos_theta(perturbed_normal) <= 0 
+                || std::abs(perturbed_normal.x) < 1e-6
+                || std::abs(perturbed_normal.y) < 1e-6)
+            {
+                return MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                    alpha_x,
+                    alpha_y,
+                    f,
+                    local_geometry,
+                    outgoing,
+                    incoming,
+                    value.m_glossy);
+            }
+
+            //
+            // i -> p -> o
+            //
+
+            // Calculate pdf and value using perturbed normal and wi, wo.
+            Spectrum value_ipo(0.0);
+            float pdf_ipo =
+                MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                    alpha_x,
+                    alpha_y,
+                    f,
+                    local_geometry,
+                    outgoing,
+                    incoming,
+                    value_ipo);
+
+            // Apply microfacet based mapping on value.
+            Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
+            Basis3f gometric_basis(local_geometry.m_shading_point.get_geometric_normal());
+            Vector3f incoming_local = gometric_basis.transform_to_local(incoming);
+            Vector3f outgoing_local = gometric_basis.transform_to_local(outgoing);
+            value += value_ipo  
+                        * lambda_p(perturbed_normal, incoming_local)
+                        * G1(perturbed_normal, outgoing_local);
+            
+            // Apply microfacet based mapping on pdf.
+            float probability_wp = lambda_p(perturbed_normal, incoming_local);
+            if(probability_wp > 0.0)
+            {
+                pdf += pdf_ipo
+                    * lambda_p(perturbed_normal, incoming_local)
+                    * G1(perturbed_normal, outgoing_local);
+            }
+
+            //
+            // i -> p -> t -> o
+            //
+
+            Vector3f tangent_world = wt(perturbed_normal);
+            Vector3f outgoing_reflected = 
+                normalize(outgoing - 2.0 * dot(outgoing, tangent_world) * tangent_world);
+            if(dot(outgoing, tangent_world) > 0)
+            {
+                // Calculate pdf and value using perturbed normal and wi, wor.
+                Spectrum value_ipto(0.0);
+                float pdf_ipto =
+                    MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                        alpha_x,
+                        alpha_y,
+                        f,
+                        local_geometry,
+                        outgoing_reflected,
+                        incoming,
+                        value_ipto);
+
+                // Apply microfacet based normal mapping on value.
+                Vector3f outgoing_reflected_local = gometric_basis.transform_to_local(outgoing_reflected);
+                value += value_ipto
+                    * lambda_p(perturbed_normal, incoming_local)
+                    * G1(perturbed_normal, outgoing_local);
+                    * (1.0 - G1(perturbed_normal, outgoing_reflected_local));
+
+                // Apply microfacet based normal mapping on pdf.
+                if(dot(outgoing, tangent_world) > 1e-6)
+                {
+                    pdf += pdf_ipto
+                        * lambda_p(perturbed_normal, incoming_local) 
+                        * (1.0 - G1(perturbed_normal, outgoing_reflected_local));
+                }
+            }
+
+            //
+            // i -> t -> p -> o
+            //
+
+            if (dot(incoming, tangent_world) > 0)
+            {
+                Vector3f incoming_reflected
+                    = normalize(incoming - 2.0 * dot(incoming, tangent_world) * tangent_world);
+
+                // Calculate pdf and value using perturbed normal and wi, wor.
+                Spectrum value_itpo(0.0);
+                float pdf_itpo =
+                    MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                        alpha_x,
+                        alpha_y,
+                        f,
+                        local_geometry,
+                        outgoing,
+                        incoming_reflected,
+                        value_itpo);
+                
+                // Apply microfacet based normal mapping on value.
+                value += value_itpo
+                    * (1.0 - lambda_p(perturbed_normal, incoming_local))
+                    * G1(perturbed_normal, outgoing_reflected_local);
+                
+                // Apply microfacet based normal mapping on pdf.
+                if(lambda_p(perturbed_normal, incoming_local) < 1.0 && dot(incoming, tangent_world) > 1e-6)
+                {
+                    pdf += pdf_itpo      
+                        * (1.0 - lambda_p(perturbed_normal, incoming_local)); 
+                }            
+            }
+            value.m_glossy = value;
+            return pdf;
+        }
+
+        static float evaluate_pdf_microfacet_based_normal_mapping(
+            const LocalGeometry&                 local_geometry,
+            const Vector3f&                      outgoing,
+            const Vector3f&                      incoming,
+            float                                alpha_x,
+            float                                alpha_y)
+        {
+            float pdf = 0.0;
+            Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
+
+            // Test perturbed_normal for validity.
+            if(cos_theta(perturbed_normal) <= 0 
+                || std::abs(perturbed_normal.x) < 1e-6
+                || std::abs(perturbed_normal.y) < 1e-6)
+            {
+                return MicrofacetBRDFHelper<GGXMDF>::pdf(
+                        alpha_x,
+                        alpha_y,
+                        local_geometry,
+                        outgoing,
+                        incoming);
+            }
+
+            //
+            // i -> p -> o
+            //
+
+            Basis3f gometric_basis(local_geometry.m_shading_point.get_geometric_normal());
+            Vector3f incoming_local = gometric_basis.transform_to_local(incoming);
+            Vector3f outgoing_local = gometric_basis.transform_to_local(outgoing);
+            if (lambda_p(perturbed_normal, incoming_local) > 0.0)
+            {
+                const float pdf_ipo =
+                    MicrofacetBRDFHelper<GGXMDF>::pdf(
+                        alpha_x,
+                        alpha_y,
+                        local_geometry,
+                        outgoing,
+                        incoming);
+                
+                // Apply microfacet based normal mapping on pdf.
+                pdf += pdf_ipo
+                    * lambda_p(perturbed_normal, incoming_local)
+                    * G1(perturbed_normal, outgoing_local);
+            }
+
+            //
+            // i -> p -> t -> o
+            //
+
+            Vector3f tangent_world = wt(perturbed_normal);
+            Vector3f outgoing_reflected = 
+                normalize(outgoing - 2.0 * dot(outgoing, tangent_world) * tangent_world);
+            Vector3f outgoing_reflected_local =
+                gometric_basis.transform_to_local(outgoing_reflected);
+            if(dot(outgoing, tangent_world) > 1e-6)
+            {
+                const float pdf_ipto =
+                    MicrofacetBRDFHelper<GGXMDF>::pdf(
+                        alpha_x,
+                        alpha_y,
+                        local_geometry,
+                        outgoing_reflected,
+                        incoming);
+
+                // Apply microfacet based normal mapping on pdf.
+                pdf += pdf_ipto
+                    * lambda_p(perturbed_normal, incoming_local)
+                    * (1.0 - G1(perturbed_normal, outgoing_reflected_local));
+            }
+
+            //
+            // i -> t -> p -> o
+            //
+            Vector3f incoming_reflected =
+                normalize(incoming - 2.0 * dot(incoming, tangent_world) * tangent_world);
+            if(lambda_p(perturbed_normal, incoming_local) < 1.0 && dot(incoming, tangent_world) > 1e-6)
+            {
+                const float pdf_itpo =
+                    MicrofacetBRDFHelper<GGXMDF>::pdf(
+                        alpha_x,
+                        alpha_y,
+                        local_geometry,
+                        outgoing,
+                        incoming_reflected);
+                
+                // Apply microfacet based normal mapping on pdf.
+                pdf += pdf_itpo
+                    * (1.0 - lambda_p(perturbed_normal, incoming_local));
+            }
+            return pdf;
+        }
+
+        static Vector3f wt(Vector3f wp)
+        {
+            return normalize(Vector3f(-wp.x, -wp.y, 0.0));
+        }
+
+        static float sin_theta(Vector3f w)
+        {
+            float sin_theta2 = 1.0 - w.z * w.z;
+            if (sin_theta2 <= 0.0)
+                return 0.0;
+            return std::sqrt(sin_theta2);
+        }
+
+        static float cos_theta(Vector3f w)
+        {
+            return w.z;
+        }
+
+        static float lambda_p(Vector3f wp, Vector3f wi)
+        {
+            float i_dot_p = dot(wp, wi);
+            Vector3f wt = wt(wp);
+            float t_dot_i = dot(wt, wi);
+            return i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));
+        }
+
+        static float G1(Vector3f wp, Vector3f w)
+        {
+            cos_theta_w = std::max(0.0, cos_theta(w));
+            cos_theta_wp = std::max(0.0, cos_theta(wp));
+            w_dot_wp = dot(w, wp);
+            Vector3f wt = wt(wp);
+            w_dot_wt = dot(w, wt);
+            return std::min(1.0,
+                    cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
         }
     };
 
