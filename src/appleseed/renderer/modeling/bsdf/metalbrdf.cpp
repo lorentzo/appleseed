@@ -163,7 +163,7 @@ namespace
                     bool use_microfacet_normal_mapping = true;
                     if(use_microfacet_normal_mapping)
                     {
-                        sample_microfacet_based_normal_mapping_specular(f, local_geometry, outgoing, sample);
+                        sample_microfacet_based_normal_mapping_specular(sampling_context, f, local_geometry, outgoing, sample);
                     }
                     else
                     {
@@ -344,10 +344,13 @@ namespace
             }
         }
 
+        // TODO:
+        // Apply microfacet based normal mapping on pdf
         static void sample_microfacet_based_normal_mapping_specular(
+            SamplingContext&                     sampling_context,
             const FresnelConductorSchlickLazanyi f, 
             const LocalGeometry&                 local_geometry, 
-            const Vector3f&                      outgoing, 
+            const foundation::Dual3f&            outgoing, 
             BSDFSample&                          sample)
         {
             Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
@@ -361,11 +364,52 @@ namespace
                 return;
             }
 
-            // wr = - incoming?
+            // calculate wi? See: specularhelper
+            foundation::Vector3f incoming = foundation::reflect(outgoing.get_value(), perturbed_normal);
+            BSDF::force_above_surface(incoming, local_geometry.m_geometric_normal);
             Vector3f tangent_world = wt(perturbed_normal);
-            Spectrum value(0.0);
-            // if sampler->next < lambda?
-            
+            Basis3f geometric_basis = Basis3f(local_geometry.m_shading_point.get_geometric_normal());
+            Basis3f shading_basis = Basis3f(local_geometry.m_shading_point.get_shading_normal());
+            Spectrum value(1.0);
+            // hitting wp?
+            if (sampling_context.next2<float>() < lambda_p(perturbed_normal, incoming))
+            {
+                // Sample facet with perturbed normal
+                SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
+                // sampling fail?
+                if(sample.m_value.m_glossy.is_zero())
+                {
+                    return;
+                }
+                // sampling direction shadowed? 
+                Vector3f outgoing_perturbed = shading_basis.transform_to_parent(outgoing.get_value());
+                float G1_value =
+                    G1(perturbed_normal, geometric_basis.transform_to_local((outgoing_perturbed)));
+                if (sampling_context.next2<float>() > G1_value)
+                {
+                    // reflect on tangent facet: -outgoing?
+                    Vector3f reflected = 
+                        normalize(outgoing_perturbed + 2.0 * dot(outgoing_perturbed, tangent_world) * tangent_world);
+                    sample.m_value.m_glossy *=
+                        G1(perturbed_normal, geometric_basis.transform_to_local(reflected));
+                }
+            }
+            else
+            {
+                // One reflection on tangent facet.
+                Vector3f reflected = 
+                    normalize(-incoming + 2.0 * dot(incoming, tangent_world) * tangent_world);
+                // Sample on wp.
+                SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
+                // Sample fail
+                if (sample.m_value.m_glossy.is_zero())
+                {
+                    return;
+                }
+                Vector3f outgoing_perturbed = shading_basis.transform_to_parent(outgoing.get_value());
+                sample.m_value.m_glossy *= 
+                    G1(perturbed_normal, geometric_basis.transform_to_local((outgoing_perturbed)));
+            }
         }
 
         static float evaluate_microfacet_based_normal_mapping(
@@ -414,9 +458,9 @@ namespace
 
             // Apply microfacet based mapping on value.
             Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
-            Basis3f gometric_basis(local_geometry.m_shading_point.get_geometric_normal());
-            Vector3f incoming_local = gometric_basis.transform_to_local(incoming);
-            Vector3f outgoing_local = gometric_basis.transform_to_local(outgoing);
+            Basis3f geometric_basis(local_geometry.m_shading_point.get_geometric_normal());
+            Vector3f incoming_local = geometric_basis.transform_to_local(incoming);
+            Vector3f outgoing_local = geometric_basis.transform_to_local(outgoing);
             value += value_ipo  
                         * lambda_p(perturbed_normal, incoming_local)
                         * G1(perturbed_normal, outgoing_local);
@@ -452,7 +496,7 @@ namespace
                         value_ipto);
 
                 // Apply microfacet based normal mapping on value.
-                Vector3f outgoing_reflected_local = gometric_basis.transform_to_local(outgoing_reflected);
+                Vector3f outgoing_reflected_local = geometric_basis.transform_to_local(outgoing_reflected);
                 value += value_ipto
                     * lambda_p(perturbed_normal, incoming_local)
                     * G1(perturbed_normal, outgoing_local);
@@ -531,9 +575,9 @@ namespace
             // i -> p -> o
             //
 
-            Basis3f gometric_basis(local_geometry.m_shading_point.get_geometric_normal());
-            Vector3f incoming_local = gometric_basis.transform_to_local(incoming);
-            Vector3f outgoing_local = gometric_basis.transform_to_local(outgoing);
+            Basis3f geometric_basis(local_geometry.m_shading_point.get_geometric_normal());
+            Vector3f incoming_local = geometric_basis.transform_to_local(incoming);
+            Vector3f outgoing_local = geometric_basis.transform_to_local(outgoing);
             if (lambda_p(perturbed_normal, incoming_local) > 0.0)
             {
                 const float pdf_ipo =
@@ -558,7 +602,7 @@ namespace
             Vector3f outgoing_reflected = 
                 normalize(outgoing - 2.0 * dot(outgoing, tangent_world) * tangent_world);
             Vector3f outgoing_reflected_local =
-                gometric_basis.transform_to_local(outgoing_reflected);
+                geometric_basis.transform_to_local(outgoing_reflected);
             if(dot(outgoing, tangent_world) > 1e-6)
             {
                 const float pdf_ipto =
