@@ -670,7 +670,7 @@ namespace
             return pdf;
         }
 
-        static Vector3f wt(Vector3f wp)
+        static Vector3f wt(Vector3f& wp)
         {
             return normalize(Vector3f(-wp.x, -wp.y, 0.0));
         }
