@@ -670,11 +670,6 @@ namespace
             return pdf;
         }
 
-        static Vector3f wt(Vector3f& wp)
-        {
-            return normalize(Vector3f(-wp.x, -wp.y, 0.0));
-        }
-
         static float sin_theta(Vector3f w)
         {
             float sin_theta2 = 1.0 - w.z * w.z;
@@ -705,6 +700,11 @@ namespace
             float w_dot_wt = dot(w, wt);
             return std::min(1.0f,
                     cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
+        }
+
+        static Vector3f wt(Vector3f& wp)
+        {
+            return normalize(Vector3f(-wp.x, -wp.y, 0.0));
         }
     };
 
