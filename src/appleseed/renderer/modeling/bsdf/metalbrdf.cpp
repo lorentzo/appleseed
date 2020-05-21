@@ -353,9 +353,10 @@ namespace
             const foundation::Dual3f&            outgoing, 
             BSDFSample&                          sample)
         {
+            // Dialog *dialog = const_cast<Dialog*>(reinterpret_cast<const Dialog *>(data));
             Vector3f& perturbed_normal = 
                 const_cast<Vector3f&>(
-                    reinterpret_cast<Vector3f&>(
+                    reinterpret_cast<const Vector3f&>(
                         local_geometry.m_shading_point->get_shading_normal()));
 
             // Test perturbed_normal for validity.
