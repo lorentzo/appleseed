@@ -354,7 +354,9 @@ namespace
             BSDFSample&                          sample)
         {
             Vector3f& perturbed_normal = 
-            reinterpret_cast<Vector3f&>(local_geometry.m_shading_point->get_shading_normal());
+                const_cast<Vector3f&>(
+                    reinterpret_cast<Vector3f&>(
+                        local_geometry.m_shading_point->get_shading_normal()));
 
             // Test perturbed_normal for validity.
             if(cos_theta(perturbed_normal) <= 0 
