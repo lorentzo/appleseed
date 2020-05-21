@@ -160,7 +160,7 @@ namespace
             {
                 if (ScatteringMode::has_specular(modes))
                 {
-                    bool use_microfacet_normal_mapping = true;
+                    bool use_microfacet_normal_mapping = false;
                     if(use_microfacet_normal_mapping)
                     {
                         sample_microfacet_based_normal_mapping_specular(sampling_context, f, local_geometry, outgoing, sample);
@@ -237,7 +237,7 @@ namespace
                 values->m_reflectance_multiplier);
 
             bool use_microfacet_normal_mapping = true;
-            const float pdf;
+            float pdf = 0.0;
             if (use_microfacet_normal_mapping)
             {
                 pdf = evaluate_microfacet_based_normal_mapping(
@@ -293,7 +293,7 @@ namespace
                 alpha_x,
                 alpha_y);
 
-            const float pdf;
+            float pdf = 0.0;
             bool use_microfacet_normal_mapping = true;
             if (use_microfacet_normal_mapping)
             {
@@ -303,7 +303,7 @@ namespace
                         outgoing,
                         incoming,
                         alpha_x,
-                        alpha_y)
+                        alpha_y);
             }
             else
             {
@@ -353,7 +353,7 @@ namespace
             const foundation::Dual3f&            outgoing, 
             BSDFSample&                          sample)
         {
-            Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
+            Vector3f perturbed_normal = local_geometry.m_shading_point->get_shading_normal();
 
             // Test perturbed_normal for validity.
             if(cos_theta(perturbed_normal) <= 0 
@@ -368,8 +368,8 @@ namespace
             foundation::Vector3f incoming = foundation::reflect(outgoing.get_value(), perturbed_normal);
             BSDF::force_above_surface(incoming, local_geometry.m_geometric_normal);
             Vector3f tangent_world = wt(perturbed_normal);
-            Basis3f geometric_basis = Basis3f(local_geometry.m_shading_point.get_geometric_normal());
-            Basis3f shading_basis = Basis3f(local_geometry.m_shading_point.get_shading_normal());
+            Basis3f geometric_basis = Basis3f(local_geometry.m_shading_point->get_geometric_normal());
+            Basis3f shading_basis = Basis3f(local_geometry.m_shading_point->get_shading_normal());
             Spectrum value(1.0);
             // hitting wp?
             if (sampling_context.next2<float>() < lambda_p(perturbed_normal, incoming))
@@ -377,7 +377,7 @@ namespace
                 // Sample facet with perturbed normal
                 SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
                 // sampling fail?
-                if(sample.m_value.m_glossy.is_zero())
+                if(foundation::is_zero(sample.m_value.m_glossy))
                 {
                     return;
                 }
@@ -389,20 +389,20 @@ namespace
                 {
                     // reflect on tangent facet: -outgoing?
                     Vector3f reflected = 
-                        normalize(outgoing_perturbed + 2.0 * dot(outgoing_perturbed, tangent_world) * tangent_world);
+                        normalize(outgoing_perturbed + Vector3f(2.0) * dot(outgoing_perturbed, tangent_world) * tangent_world);
                     sample.m_value.m_glossy *=
                         G1(perturbed_normal, geometric_basis.transform_to_local(reflected));
                 }
             }
             else
             {
-                // One reflection on tangent facet.
+                // One reflection on tangent facet. TODO: it should be used as incoming?
                 Vector3f reflected = 
-                    normalize(-incoming + 2.0 * dot(incoming, tangent_world) * tangent_world);
+                    normalize(-incoming + Vector3f(2.0) * dot(incoming, tangent_world) * tangent_world);
                 // Sample on wp.
                 SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
                 // Sample fail
-                if (sample.m_value.m_glossy.is_zero())
+                if (foundation::is_zero(sample.m_value.m_glossy))
                 {
                     return;
                 }
@@ -421,9 +421,9 @@ namespace
             float                                alpha_y,
             const FresnelConductorSchlickLazanyi f)
         {
-            Spectrum value(0.0);
+            Spectrum final_value(0.0);
             float pdf = 0.0;
-            Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
+            Vector3f perturbed_normal = local_geometry.m_shading_point->get_shading_normal();
 
             // Test perturbed_normal for validity.
             if(cos_theta(perturbed_normal) <= 0 
@@ -457,11 +457,10 @@ namespace
                     value_ipo);
 
             // Apply microfacet based mapping on value.
-            Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
-            Basis3f geometric_basis(local_geometry.m_shading_point.get_geometric_normal());
+            Basis3f geometric_basis(local_geometry.m_shading_point->get_geometric_normal());
             Vector3f incoming_local = geometric_basis.transform_to_local(incoming);
             Vector3f outgoing_local = geometric_basis.transform_to_local(outgoing);
-            value += value_ipo  
+            final_value += value_ipo  
                         * lambda_p(perturbed_normal, incoming_local)
                         * G1(perturbed_normal, outgoing_local);
             
@@ -480,7 +479,7 @@ namespace
 
             Vector3f tangent_world = wt(perturbed_normal);
             Vector3f outgoing_reflected = 
-                normalize(outgoing - 2.0 * dot(outgoing, tangent_world) * tangent_world);
+                normalize(outgoing - Vector3f(2.0) * dot(outgoing, tangent_world) * tangent_world);
             if(dot(outgoing, tangent_world) > 0)
             {
                 // Calculate pdf and value using perturbed normal and wi, wor.
@@ -497,10 +496,10 @@ namespace
 
                 // Apply microfacet based normal mapping on value.
                 Vector3f outgoing_reflected_local = geometric_basis.transform_to_local(outgoing_reflected);
-                value += value_ipto
+                final_value += value_ipto
                     * lambda_p(perturbed_normal, incoming_local)
-                    * G1(perturbed_normal, outgoing_local);
-                    * (1.0 - G1(perturbed_normal, outgoing_reflected_local));
+                    * G1(perturbed_normal, outgoing_local)
+                    * (1.0f - G1(perturbed_normal, outgoing_reflected_local));
 
                 // Apply microfacet based normal mapping on pdf.
                 if(dot(outgoing, tangent_world) > 1e-6)
@@ -518,7 +517,7 @@ namespace
             if (dot(incoming, tangent_world) > 0)
             {
                 Vector3f incoming_reflected
-                    = normalize(incoming - 2.0 * dot(incoming, tangent_world) * tangent_world);
+                    = normalize(incoming - Vector3f(2.0) * dot(incoming, tangent_world) * tangent_world);
 
                 // Calculate pdf and value using perturbed normal and wi, wor.
                 Spectrum value_itpo(0.0);
@@ -533,9 +532,10 @@ namespace
                         value_itpo);
                 
                 // Apply microfacet based normal mapping on value.
-                value += value_itpo
-                    * (1.0 - lambda_p(perturbed_normal, incoming_local))
-                    * G1(perturbed_normal, outgoing_reflected_local);
+                Vector3f outgoing_reflected_local = geometric_basis.transform_to_local(outgoing_reflected);
+                final_value += (1.0f - lambda_p(perturbed_normal, incoming_local))
+                                * G1(perturbed_normal, outgoing_reflected_local)
+                                * value_itpo;
                 
                 // Apply microfacet based normal mapping on pdf.
                 if(lambda_p(perturbed_normal, incoming_local) < 1.0 && dot(incoming, tangent_world) > 1e-6)
@@ -544,7 +544,7 @@ namespace
                         * (1.0 - lambda_p(perturbed_normal, incoming_local)); 
                 }            
             }
-            value.m_glossy = value;
+            value.m_glossy = final_value;
             return pdf;
         }
 
@@ -556,7 +556,7 @@ namespace
             float                                alpha_y)
         {
             float pdf = 0.0;
-            Vector3f perturbed_normal = local_geometry.m_shading_point.get_shading_normal();
+            Vector3f perturbed_normal = local_geometry.m_shading_point->get_shading_normal();
 
             // Test perturbed_normal for validity.
             if(cos_theta(perturbed_normal) <= 0 
@@ -575,7 +575,7 @@ namespace
             // i -> p -> o
             //
 
-            Basis3f geometric_basis(local_geometry.m_shading_point.get_geometric_normal());
+            Basis3f geometric_basis(local_geometry.m_shading_point->get_geometric_normal());
             Vector3f incoming_local = geometric_basis.transform_to_local(incoming);
             Vector3f outgoing_local = geometric_basis.transform_to_local(outgoing);
             if (lambda_p(perturbed_normal, incoming_local) > 0.0)
@@ -600,7 +600,7 @@ namespace
 
             Vector3f tangent_world = wt(perturbed_normal);
             Vector3f outgoing_reflected = 
-                normalize(outgoing - 2.0 * dot(outgoing, tangent_world) * tangent_world);
+                normalize(outgoing - Vector3f(2.0) * dot(outgoing, tangent_world) * tangent_world);
             Vector3f outgoing_reflected_local =
                 geometric_basis.transform_to_local(outgoing_reflected);
             if(dot(outgoing, tangent_world) > 1e-6)
@@ -623,7 +623,7 @@ namespace
             // i -> t -> p -> o
             //
             Vector3f incoming_reflected =
-                normalize(incoming - 2.0 * dot(incoming, tangent_world) * tangent_world);
+                normalize(incoming - Vector3f(2.0) * dot(incoming, tangent_world) * tangent_world);
             if(lambda_p(perturbed_normal, incoming_local) < 1.0 && dot(incoming, tangent_world) > 1e-6)
             {
                 const float pdf_itpo =
@@ -669,11 +669,11 @@ namespace
 
         static float G1(Vector3f wp, Vector3f w)
         {
-            cos_theta_w = std::max(0.0, cos_theta(w));
-            cos_theta_wp = std::max(0.0, cos_theta(wp));
-            w_dot_wp = dot(w, wp);
+            float cos_theta_w = std::max(0.0f, cos_theta(w));
+            float cos_theta_wp = std::max(0.0f, cos_theta(wp));
+            float w_dot_wp = dot(w, wp);
             Vector3f wt = wt(wp);
-            w_dot_wt = dot(w, wt);
+            float w_dot_wt = dot(w, wt);
             return std::min(1.0,
                     cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
         }
