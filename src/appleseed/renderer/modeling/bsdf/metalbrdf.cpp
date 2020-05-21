@@ -353,11 +353,16 @@ namespace
             const foundation::Dual3f&            outgoing, 
             BSDFSample&                          sample)
         {
-            // Dialog *dialog = const_cast<Dialog*>(reinterpret_cast<const Dialog *>(data));
             Vector3f& perturbed_normal = 
                 const_cast<Vector3f&>(
                     reinterpret_cast<const Vector3f&>(
                         local_geometry.m_shading_point->get_shading_normal()));
+
+            // Geometric also known as original normal.
+            Vector3f& geometric_normal = 
+                const_cast<Vector3f&>(
+                    reinterpret_cast<const Vector3f&>(
+                        local_geometry.m_shading_point->get_geometric_normal()));
 
             // Test perturbed_normal for validity.
             if(cos_theta(perturbed_normal) <= 0 
@@ -372,8 +377,8 @@ namespace
             foundation::Vector3f incoming = foundation::reflect(outgoing.get_value(), perturbed_normal);
             BSDF::force_above_surface(incoming, local_geometry.m_geometric_normal);
             Vector3f tangent_world = wt(perturbed_normal);
-            Basis3f geometric_basis = Basis3f(local_geometry.m_shading_point->get_geometric_normal());
-            Basis3f shading_basis = Basis3f(local_geometry.m_shading_point->get_shading_normal());
+            Basis3f geometric_basis = Basis3f(geometric_normal);
+            Basis3f shading_basis = Basis3f(perturbed_normal);
             Spectrum value(1.0);
             // hitting wp?
             if (sampling_context.next2<float>() < lambda_p(perturbed_normal, incoming))
@@ -427,7 +432,17 @@ namespace
         {
             Spectrum final_value(0.0);
             float pdf = 0.0;
-            Vector3f perturbed_normal = local_geometry.m_shading_point->get_shading_normal();
+
+            Vector3f& perturbed_normal = 
+                const_cast<Vector3f&>(
+                    reinterpret_cast<const Vector3f&>(
+                        local_geometry.m_shading_point->get_shading_normal()));
+
+            // Geometric also known as original normal.
+            Vector3f& geometric_normal = 
+                const_cast<Vector3f&>(
+                    reinterpret_cast<const Vector3f&>(
+                        local_geometry.m_shading_point->get_geometric_normal()));
 
             // Test perturbed_normal for validity.
             if(cos_theta(perturbed_normal) <= 0 
@@ -461,7 +476,7 @@ namespace
                     value_ipo);
 
             // Apply microfacet based mapping on value.
-            Basis3f geometric_basis(local_geometry.m_shading_point->get_geometric_normal());
+            Basis3f geometric_basis(geometric_normal);
             Vector3f incoming_local = geometric_basis.transform_to_local(incoming);
             Vector3f outgoing_local = geometric_basis.transform_to_local(outgoing);
             final_value += value_ipo  
@@ -560,7 +575,17 @@ namespace
             float                                alpha_y)
         {
             float pdf = 0.0;
-            Vector3f perturbed_normal = local_geometry.m_shading_point->get_shading_normal();
+
+            Vector3f& perturbed_normal = 
+                const_cast<Vector3f&>(
+                    reinterpret_cast<const Vector3f&>(
+                        local_geometry.m_shading_point->get_shading_normal()));
+
+            // Geometric also known as original normal.
+            Vector3f& geometric_normal = 
+                const_cast<Vector3f&>(
+                    reinterpret_cast<const Vector3f&>(
+                        local_geometry.m_shading_point->get_geometric_normal()));
 
             // Test perturbed_normal for validity.
             if(cos_theta(perturbed_normal) <= 0 
@@ -579,7 +604,7 @@ namespace
             // i -> p -> o
             //
 
-            Basis3f geometric_basis(local_geometry.m_shading_point->get_geometric_normal());
+            Basis3f geometric_basis(geometric_normal);
             Vector3f incoming_local = geometric_basis.transform_to_local(incoming);
             Vector3f outgoing_local = geometric_basis.transform_to_local(outgoing);
             if (lambda_p(perturbed_normal, incoming_local) > 0.0)
@@ -678,7 +703,7 @@ namespace
             float w_dot_wp = dot(w, wp);
             Vector3f wt = wt(wp);
             float w_dot_wt = dot(w, wt);
-            return std::min(1.0,
+            return std::min(1.0f,
                     cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
         }
     };
