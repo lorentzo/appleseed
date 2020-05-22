@@ -683,6 +683,11 @@ namespace
             return w.z;
         }
 
+        static Vector3f wt(Vector3f& wp)
+        {
+            return normalize(Vector3f(-wp.x, -wp.y, 0.0));
+        }
+
         static float lambda_p(Vector3f wp, Vector3f wi)
         {
             float i_dot_p = dot(wp, wi);
@@ -700,11 +705,6 @@ namespace
             float w_dot_wt = dot(w, wt);
             return std::min(1.0f,
                     cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
-        }
-
-        static Vector3f wt(Vector3f& wp)
-        {
-            return normalize(Vector3f(-wp.x, -wp.y, 0.0));
         }
     };
 
