@@ -691,8 +691,8 @@ namespace
         static float lambda_p(Vector3f wp, Vector3f wi)
         {
             float i_dot_p = dot(wp, wi);
-            Vector3f wt = wt(wp);
-            float t_dot_i = dot(wt, wi);
+            Vector3f tangent = wt(wp);
+            float t_dot_i = dot(tangent, wi);
             return i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));
         }
 
@@ -701,8 +701,8 @@ namespace
             float cos_theta_w = std::max(0.0f, cos_theta(w));
             float cos_theta_wp = std::max(0.0f, cos_theta(wp));
             float w_dot_wp = dot(w, wp);
-            Vector3f wt = wt(wp);
-            float w_dot_wt = dot(w, wt);
+            Vector3f tangent = wt(wp);
+            float w_dot_wt = dot(w, tangent);
             return std::min(1.0f,
                     cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
         }
