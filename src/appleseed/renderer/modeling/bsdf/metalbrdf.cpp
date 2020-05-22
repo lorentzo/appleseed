@@ -161,7 +161,7 @@ namespace
             {
                 if (ScatteringMode::has_specular(modes))
                 {
-                    bool use_microfacet_normal_mapping = false;
+                    bool use_microfacet_normal_mapping = true;
                     if(use_microfacet_normal_mapping)
                     {
                         sample_microfacet_based_normal_mapping_specular(sampling_context, f, local_geometry, outgoing, sample);
@@ -185,7 +185,22 @@ namespace
                     alpha_x,
                     alpha_y);
 
-                MicrofacetBRDFHelper<GGXMDF>::sample(
+                bool use_microfacet_normal_mapping = true;
+                if(use_microfacet_normal_mapping)
+                {
+                    sample_microfacet_based_normal_mapping_glossy(
+                        sampling_context,
+                        values->m_roughness,
+                        alpha_x,
+                        alpha_y,
+                        f,
+                        local_geometry,
+                        outgoing,
+                        sample);
+                }
+                else
+                {
+                    MicrofacetBRDFHelper<GGXMDF>::sample(
                     sampling_context,
                     values->m_roughness,
                     alpha_x,
@@ -194,7 +209,8 @@ namespace
                     local_geometry,
                     outgoing,
                     sample);
-
+                }
+                
                 if (sample.get_mode() != ScatteringMode::None)
                 {
                     apply_energy_compensation_factor(
@@ -345,8 +361,109 @@ namespace
             }
         }
 
-        // TODO:
-        // Apply microfacet based normal mapping on pdf
+        static void sample_microfacet_based_normal_mapping_glossy(
+            SamplingContext&                sampling_context,
+            const float                     roughness,
+            const float                     alpha_x,
+            const float                     alpha_y,
+            FresnelFun                      f,
+            const BSDF::LocalGeometry&      local_geometry,
+            const foundation::Dual3f&       outgoing,
+            BSDFSample&                     sample)
+        {
+            Vector3f& perturbed_normal = 
+                const_cast<Vector3f&>(
+                    reinterpret_cast<const Vector3f&>(
+                        local_geometry.m_shading_point->get_shading_normal()));
+
+            // Geometric also known as original normal.
+            Vector3f& geometric_normal = 
+                const_cast<Vector3f&>(
+                    reinterpret_cast<const Vector3f&>(
+                        local_geometry.m_shading_point->get_geometric_normal()));
+
+            // Test perturbed_normal for validity.
+            if(cos_theta(perturbed_normal) <= 0 
+                || std::abs(perturbed_normal.x) < 1e-6
+                || std::abs(perturbed_normal.y) < 1e-6)
+            {
+                SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
+                return;
+            }
+
+            Vector3f tangent_world = wt(perturbed_normal);
+            Basis3f geometric_basis = Basis3f(geometric_normal);
+            Basis3f shading_basis = Basis3f(perturbed_normal);
+            Spectrum value(1.0);
+            // hitting wp? 
+            // Incoming in mitsuba is outgoing in appleseed
+            if (sampling_context.next2<float>() < lambda_p(perturbed_normal, -outgoing))
+            {
+                // Sample facet with perturbed normal
+                MicrofacetBRDFHelper<GGXMDF>::sample(
+                    sampling_context,
+                    values->m_roughness,
+                    alpha_x,
+                    alpha_y,
+                    f,
+                    local_geometry,
+                    outgoing,
+                    sample);
+
+                // sampling fail?
+                if(foundation::is_zero(sample.m_value.m_glossy))
+                {
+                    return;
+                }
+                // sampling direction shadowed? 
+                // Incoming in mitsuba is outgoing in appleseed
+                float G1_value =
+                    G1(perturbed_normal, geometric_basis.transform_to_local((sample.m_incoming)));
+                
+                // Is the sampled direction shadowed?
+                if (sampling_context.next2<float>() > G1_value)
+                {
+                    // reflect on tangent facet: -outgoing?
+                    Vector3f reflected = 
+                        normalize(-sample.m_incoming + Vector3f(2.0) * dot(sample.m_incoming, tangent_world) * tangent_world);
+                    sample.m_value.m_glossy *=
+                        G1(perturbed_normal, geometric_basis.transform_to_local(reflected));
+                }
+            }
+            else
+            {
+                // One reflection on tangent facet. TODO: it should be used as incoming?
+                Vector3f reflected = 
+                    normalize(outgoing + Vector3f(2.0) * dot(-outgoing, tangent_world) * tangent_world);
+                // Sample on wp.
+                MicrofacetBRDFHelper<GGXMDF>::sample(
+                    sampling_context,
+                    values->m_roughness,
+                    alpha_x,
+                    alpha_y,
+                    f,
+                    local_geometry,
+                    reflected,
+                    sample);
+                // Sample fail
+                if (foundation::is_zero(sample.m_value.m_glossy))
+                {
+                    return;
+                }
+                //Vector3f outgoing_perturbed = shading_basis.transform_to_parent(outgoing.get_value());
+                sample.m_value.m_glossy *= 
+                    G1(perturbed_normal, geometric_basis.transform_to_local((sample.m_incoming)));
+            }
+            // In glosy case, pdf should be modified. 
+            evaluate_pdf_microfacet_based_normal_mapping(
+                local_geometry,
+                outgoing,
+                sample.m_incoming,
+                alpha_x,
+                alpha_y);
+        }
+
+        // Incoming in mitsuba is outgoing in appleseed
         static void sample_microfacet_based_normal_mapping_specular(
             SamplingContext&                     sampling_context,
             const FresnelConductorSchlickLazanyi f, 
@@ -375,14 +492,17 @@ namespace
             }
 
             // calculate wi? See: specularhelper
-            foundation::Vector3f incoming = foundation::reflect(outgoing.get_value(), perturbed_normal);
-            BSDF::force_above_surface(incoming, local_geometry.m_geometric_normal);
+            // Incoming in mitsuba is outgoing in appleseed
+            //foundation::Vector3f incoming = foundation::reflect(outgoing.get_value(), perturbed_normal);
+            //BSDF::force_above_surface(incoming, local_geometry.m_geometric_normal);
+
             Vector3f tangent_world = wt(perturbed_normal);
             Basis3f geometric_basis = Basis3f(geometric_normal);
             Basis3f shading_basis = Basis3f(perturbed_normal);
             Spectrum value(1.0);
-            // hitting wp?
-            if (sampling_context.next2<float>() < lambda_p(perturbed_normal, incoming))
+            // hitting wp? 
+            // Incoming in mitsuba is outgoing in appleseed
+            if (sampling_context.next2<float>() < lambda_p(perturbed_normal, -outgoing))
             {
                 // Sample facet with perturbed normal
                 SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
@@ -392,14 +512,17 @@ namespace
                     return;
                 }
                 // sampling direction shadowed? 
-                Vector3f outgoing_perturbed = shading_basis.transform_to_parent(outgoing.get_value());
+                // Incoming in mitsuba is outgoing in appleseed
+                //Vector3f outgoing_perturbed = shading_basis.transform_to_parent(outgoing.get_value());
                 float G1_value =
-                    G1(perturbed_normal, geometric_basis.transform_to_local((outgoing_perturbed)));
+                    G1(perturbed_normal, geometric_basis.transform_to_local((sample.m_incoming)));
+                
+                // Is the sampled direction shadowed?
                 if (sampling_context.next2<float>() > G1_value)
                 {
                     // reflect on tangent facet: -outgoing?
                     Vector3f reflected = 
-                        normalize(outgoing_perturbed + Vector3f(2.0) * dot(outgoing_perturbed, tangent_world) * tangent_world);
+                        normalize(-sample.m_incoming + Vector3f(2.0) * dot(sample.m_incoming, tangent_world) * tangent_world);
                     sample.m_value.m_glossy *=
                         G1(perturbed_normal, geometric_basis.transform_to_local(reflected));
                 }
@@ -408,18 +531,19 @@ namespace
             {
                 // One reflection on tangent facet. TODO: it should be used as incoming?
                 Vector3f reflected = 
-                    normalize(-incoming + Vector3f(2.0) * dot(incoming, tangent_world) * tangent_world);
+                    normalize(outgoing + Vector3f(2.0) * dot(-outgoing, tangent_world) * tangent_world);
                 // Sample on wp.
-                SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
+                SpecularBRDFHelper::sample(f, local_geometry, reflected, sample);
                 // Sample fail
                 if (foundation::is_zero(sample.m_value.m_glossy))
                 {
                     return;
                 }
-                Vector3f outgoing_perturbed = shading_basis.transform_to_parent(outgoing.get_value());
+                //Vector3f outgoing_perturbed = shading_basis.transform_to_parent(outgoing.get_value());
                 sample.m_value.m_glossy *= 
-                    G1(perturbed_normal, geometric_basis.transform_to_local((outgoing_perturbed)));
+                    G1(perturbed_normal, geometric_basis.transform_to_local((sample.m_incoming)));
             }
+            // In specular case, pdf is BSDF::deltaDiract and it is not used.
         }
 
         static float evaluate_microfacet_based_normal_mapping(
