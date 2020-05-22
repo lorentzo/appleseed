@@ -148,6 +148,7 @@ namespace
             const int                   modes,
             BSDFSample&                 sample) const override
         {
+            RENDERER_LOG_ERROR("USING SAMPLE");
             const InputValues* values = static_cast<const InputValues*>(data);
 
             const FresnelConductorSchlickLazanyi f(
@@ -430,6 +431,7 @@ namespace
             float                                alpha_y,
             const FresnelConductorSchlickLazanyi f)
         {
+            RENDERER_LOG_ERROR("USING MICROFACET EVAL");
             Spectrum final_value(0.0);
             float pdf = 0.0;
 
@@ -574,6 +576,7 @@ namespace
             float                                alpha_x,
             float                                alpha_y)
         {
+            RENDERER_LOG_ERROR("USING MICROFACET PDF");
             float pdf = 0.0;
 
             Vector3f& perturbed_normal = 
