@@ -443,7 +443,7 @@ namespace
                     alpha_y,
                     f,
                     local_geometry,
-                    reflected,
+                    Dual3f(reflected),
                     sample);
                 // Sample fail
                 if (foundation::is_zero(sample.m_value.m_glossy))
@@ -533,7 +533,7 @@ namespace
                 Vector3f reflected = 
                     normalize(outgoing.get_value() + Vector3f(2.0) * dot(-outgoing.get_value(), tangent_world) * tangent_world);
                 // Sample on wp.
-                SpecularBRDFHelper::sample(f, local_geometry, reflected, sample);
+                SpecularBRDFHelper::sample(f, local_geometry, Dual3f(reflected), sample);
                 // Sample fail
                 if (foundation::is_zero(sample.m_value.m_glossy))
                 {
