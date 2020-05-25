@@ -160,7 +160,7 @@ namespace
             {
                 if (ScatteringMode::has_specular(modes))
                 {
-                    bool use_microfacet_normal_mapping = false;
+                    bool use_microfacet_normal_mapping = true;
                     if(use_microfacet_normal_mapping)
                     {
                         sample_microfacet_based_normal_mapping_specular(sampling_context, f, local_geometry, outgoing, sample);
@@ -184,7 +184,7 @@ namespace
                     alpha_x,
                     alpha_y);
 
-                bool use_microfacet_normal_mapping = false;
+                bool use_microfacet_normal_mapping = true;
                 if(use_microfacet_normal_mapping)
                 {
                     sample_microfacet_based_normal_mapping_glossy(
@@ -252,7 +252,7 @@ namespace
                 values->m_precomputed.m_a,
                 values->m_reflectance_multiplier);
 
-            bool use_microfacet_normal_mapping = false;
+            bool use_microfacet_normal_mapping = true;
             float pdf = 0.0;
             if (use_microfacet_normal_mapping)
             {
@@ -310,7 +310,7 @@ namespace
                 alpha_y);
 
             float pdf = 0.0;
-            bool use_microfacet_normal_mapping = false;
+            bool use_microfacet_normal_mapping = true;
             if (use_microfacet_normal_mapping)
             {
                 pdf =
