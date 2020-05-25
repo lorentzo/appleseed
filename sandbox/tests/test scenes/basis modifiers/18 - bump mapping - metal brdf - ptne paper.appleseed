@@ -65,7 +65,7 @@
             <object name="sphere" model="mesh_object">
                 <parameter name="filename" value="sphere.obj" />
             </object>
-            <object_instance name="sphere.sphere_inst" object="sphere.0">
+            <object_instance name="sphere.sphere_inst" object="sphere.Sphere - W050">
                 <assign_material slot="default" side="front" material="metal_mat" />
             </object_instance>
         </assembly>
