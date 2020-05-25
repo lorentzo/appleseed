@@ -62,10 +62,10 @@
                     </matrix>
                 </transform>
             </light>
-            <object name="square" model="mesh_object">
+            <object name="sphere" model="mesh_object">
                 <parameter name="filename" value="sphere.obj" />
             </object>
-            <object_instance name="square.square_inst" object="square">
+            <object_instance name="sphere.sphere_inst" object="sphere">
                 <assign_material slot="default" side="front" material="metal_mat" />
             </object_instance>
         </assembly>
