@@ -466,7 +466,7 @@ namespace
                 value *= 
                     G1(perturbed_normal, sample.m_incoming.get_value());
             }
-            if (cos_theta(sample.m_incoming.get_value() <= 0.0f))
+            if (cos_theta(sample.m_incoming.get_value()) <= 0.0f)
             {
                 sample.m_value.m_glossy = Spectrum(0.0f);
                 return;
@@ -558,7 +558,7 @@ namespace
                 value *= 
                     G1(perturbed_normal, sample.m_incoming.get_value());
             }
-            if (cos_theta(sample.m_incoming.get_value() <= 0.0f))
+            if (cos_theta(sample.m_incoming.get_value()) <= 0.0f)
             {
                 sample.m_value.m_glossy = Spectrum(0.0f);
                 return;
