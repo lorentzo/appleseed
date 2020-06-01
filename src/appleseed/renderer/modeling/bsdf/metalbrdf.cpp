@@ -386,12 +386,12 @@ namespace
                         local_geometry.m_shading_point->get_shading_normal()));
 
             // Local space perturbed normal
-            Vector3f& perturbed_normal_local = 
+            const Vector3f& perturbed_normal_local = 
                 original_basis.transform_to_local(perturbed_normal);
 
             // Local space outgoing.
             Vector3f& outgoing_local = 
-                original_basis.transform_to_local(outgoing);
+                original_basis.transform_to_local(outgoing.get_value());
 
             // World space tangent
             Vector3f tangent_world = wt(perturbed_normal);
@@ -437,7 +437,7 @@ namespace
                     return;
                 }
                 // Local space incoming.
-                Vector3f& incoming_local = 
+                const Vector3f& incoming_local = 
                     original_basis.transform_to_local(sample.m_incoming.get_value());
 
                 // Sampling direction shadowed?
@@ -540,11 +540,11 @@ namespace
                         local_geometry.m_shading_point->get_shading_normal())); 
 
             // Local space perturbed normal
-            Vector3f& perturbed_normal_local = 
+            const Vector3f& perturbed_normal_local = 
                 original_basis.transform_to_local(perturbed_normal);
 
             // Local space outgoing.
-            Vector3f& outgoing_local = 
+            const Vector3f& outgoing_local = 
                 original_basis.transform_to_local(outgoing.get_value());
 
             // World space tangent
@@ -573,7 +573,7 @@ namespace
                 }
 
                 // Local space incoming.
-                Vector3f& incoming_local = 
+                const Vector3f& incoming_local = 
                     original_basis.transform_to_local(sample.m_incoming.get_value());
 
                 float G1_value =
@@ -657,19 +657,19 @@ namespace
                         local_geometry.m_shading_point->get_shading_normal()));
             
             // Local space shading (perturbed) normal in intersection point.
-            Vector3f& perturbed_normal_local = 
+            const Vector3f& perturbed_normal_local = 
                original_basis.transform_to_local(perturbed_normal_world);
 
             // Local space incoming.
-            Vector3f& incoming_local = 
+            const Vector3f& incoming_local = 
                 original_basis.transform_to_local(incoming);
 
             // Local space outgoing.
-            Vector3f& outgoing_local = 
+            const Vector3f& outgoing_local = 
                 original_basis.transform_to_local(outgoing);
 
             // World space tangent
-            Vector3f tangent_world = wt(perturbed_normal);
+            Vector3f tangent_world = wt(perturbed_normal_world);
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - Vector3f(2.0) * dot(outgoing, tangent_world) * tangent_world);
@@ -797,19 +797,19 @@ namespace
                         local_geometry.m_shading_point->get_shading_normal()));
             
             // Local space shading (perturbed) normal in intersection point.
-            Vector3f& perturbed_normal_local = 
+            const Vector3f& perturbed_normal_local = 
                 original_basis.transform_to_local(perturbed_normal_world);
 
             // Local space incoming.
-            Vector3f& incoming_local = 
+            const Vector3f& incoming_local = 
                 original_basis.transform_to_local(incoming);
 
             // Local space outgoing.
-            Vector3f& outgoing_local = 
+            const Vector3f& outgoing_local = 
                 original_basis.transform_to_local(outgoing);
 
             // World space tangent
-            Vector3f tangent_world = wt(perturbed_normal);
+            Vector3f tangent_world = wt(perturbed_normal_world);
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - Vector3f(2.0) * dot(outgoing, tangent_world) * tangent_world);
