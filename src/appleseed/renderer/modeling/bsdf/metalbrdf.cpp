@@ -390,7 +390,7 @@ namespace
                 original_basis.transform_to_local(perturbed_normal);
 
             // Local space outgoing.
-            Vector3f& outgoing_local = 
+            const Vector3f& outgoing_local = 
                 original_basis.transform_to_local(outgoing.get_value());
 
             // World space tangent
