@@ -387,7 +387,7 @@ namespace
             perturbed_normal_world.y = (float) world_preturbed_normal_double.y;
             perturbed_normal_world.z = (float) world_preturbed_normal_double.z;
 
-            // Local space perturbed normal
+            // Local space perturbed normal.
             const Vector3f& perturbed_normal_local = 
                 original_basis.transform_to_local(perturbed_normal_world);
 
@@ -858,7 +858,7 @@ namespace
                         local_geometry,
                         outgoing,
                         incoming);
-                
+
                 // Apply microfacet based normal mapping on pdf.
                 pdf += pdf_ipo
                     * lambda_p(perturbed_normal_local, incoming_local)
@@ -881,6 +881,7 @@ namespace
                         * (1.0 - G1(perturbed_normal_local, outgoing_reflected_local));
                 }
             }
+            //RENDERER_LOG_INFO(" dot incoming tangent %f", dot(outgoing, tangent_world));
             // i -> t -> p -> o
             if(lambda_p(perturbed_normal_local, incoming_local) < 1.0 && dot(incoming, tangent_world) > 1e-6)
             {
@@ -926,7 +927,10 @@ namespace
             float i_dot_p = dot(wp, wi);
             Vector3f tangent = wt(wp);
             float t_dot_i = dot(tangent, wi);
-            return i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));
+            float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));
+            if(isnan(lambda))
+                RENDERER_LOG_INFO("lambda %f", lambda);
+            return lambda;
         }
 
         static float G1(Vector3f wp, Vector3f w)
@@ -936,8 +940,10 @@ namespace
             float w_dot_wp = dot(w, wp);
             Vector3f tangent = wt(wp);
             float w_dot_wt = dot(w, tangent);
-            return std::min(1.0f,
-                    cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
+            float G = std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
+            if(isnan(G))
+                RENDERER_LOG_INFO("G %f", G);
+            return G;
         }
     };
 
