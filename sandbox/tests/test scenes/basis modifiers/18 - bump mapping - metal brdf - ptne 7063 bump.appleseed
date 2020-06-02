@@ -49,7 +49,7 @@
             </material>
             <light name="light1" model="point_light">
                 <parameter name="cast_indirect_light" value="true" />
-                <parameter name="exposure" value="0.0" />
+                <parameter name="exposure" value="5.0" />
                 <parameter name="importance_multiplier" value="1.0" />
                 <parameter name="intensity" value="10" />
                 <parameter name="intensity_multiplier" value="1.0" />
