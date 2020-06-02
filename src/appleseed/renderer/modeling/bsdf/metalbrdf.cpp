@@ -372,30 +372,21 @@ namespace
             Spectrum value(1.0);
 
             // Original shading normal and basis.
-            const Vector3d& world_original_normal_double = local_geometry.m_shading_point->get_original_shading_normal();
-            Vector3f original_normal_world;
-            original_normal_world.x = (float) world_original_normal_double.x;
-            original_normal_world.y = (float) world_original_normal_double.y;
-            original_normal_world.z = (float) world_original_normal_double.z;
-
+            Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
             Basis3f original_basis(original_normal_world);
 
             // World space shading (perturbed) normal in intersection point.
-            const Vector3d& world_preturbed_normal_double = local_geometry.m_shading_point->get_shading_normal();
-            Vector3f perturbed_normal_world;
-            perturbed_normal_world.x = (float) world_preturbed_normal_double.x;
-            perturbed_normal_world.y = (float) world_preturbed_normal_double.y;
-            perturbed_normal_world.z = (float) world_preturbed_normal_double.z;
+            Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // Local space perturbed normal.
-            const Vector3f& perturbed_normal_local = 
+            Vector3f perturbed_normal_local = 
                 original_basis.transform_to_local(perturbed_normal_world);
 
             // Local space outgoing.
             const Vector3f& outgoing_local = 
                 original_basis.transform_to_local(outgoing.get_value());
 
-            // World space tangent
+            // World space tangent.
             Vector3f tangent_world = wt(perturbed_normal_world);
 
             // Test perturbed_normal for validity.
@@ -519,7 +510,6 @@ namespace
             sample.set_to_scattering(ScatteringMode::Glossy, pdf);
         }
 
-        // Incoming in mitsuba is outgoing in appleseed.
         static void sample_microfacet_based_normal_mapping_specular(
             SamplingContext&                     sampling_context,
             const FresnelConductorSchlickLazanyi f, 
@@ -530,20 +520,11 @@ namespace
             Spectrum value(1.0);
 
             // Original shading normal and basis.
-            const Vector3d& world_original_normal_double = local_geometry.m_shading_point->get_original_shading_normal();
-            Vector3f original_normal_world;
-            original_normal_world.x = (float) world_original_normal_double.x;
-            original_normal_world.y = (float) world_original_normal_double.y;
-            original_normal_world.z = (float) world_original_normal_double.z;
-
+            Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
             Basis3f original_basis(original_normal_world);
 
             // World space shading (perturbed) normal in intersection point.
-            const Vector3d& world_preturbed_normal_double = local_geometry.m_shading_point->get_shading_normal();
-            Vector3f perturbed_normal_world;
-            perturbed_normal_world.x = (float) world_preturbed_normal_double.x;
-            perturbed_normal_world.y = (float) world_preturbed_normal_double.y;
-            perturbed_normal_world.z = (float) world_preturbed_normal_double.z;
+            Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // Local space perturbed normal
             const Vector3f& perturbed_normal_local = 
@@ -650,20 +631,11 @@ namespace
             Spectrum final_value(0.0);
 
             // Original shading normal and basis.
-            const Vector3d& world_original_normal_double = local_geometry.m_shading_point->get_original_shading_normal();
-            Vector3f original_normal_world;
-            original_normal_world.x = (float) world_original_normal_double.x;
-            original_normal_world.y = (float) world_original_normal_double.y;
-            original_normal_world.z = (float) world_original_normal_double.z;
-
+            Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
             Basis3f original_basis(original_normal_world);
 
             // World space shading (perturbed) normal in intersection point.
-            const Vector3d& world_preturbed_normal_double = local_geometry.m_shading_point->get_shading_normal();
-            Vector3f perturbed_normal_world;
-            perturbed_normal_world.x = (float) world_preturbed_normal_double.x;
-            perturbed_normal_world.y = (float) world_preturbed_normal_double.y;
-            perturbed_normal_world.z = (float) world_preturbed_normal_double.z;
+            Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
             
             // Local space shading (perturbed) normal in intersection point.
             const Vector3f& perturbed_normal_local = 
@@ -793,20 +765,11 @@ namespace
             float pdf = 0.0;
 
             // Original shading normal and basis.
-            const Vector3d& world_original_normal_double = local_geometry.m_shading_point->get_original_shading_normal();
-            Vector3f original_normal_world;
-            original_normal_world.x = (float) world_original_normal_double.x;
-            original_normal_world.y = (float) world_original_normal_double.y;
-            original_normal_world.z = (float) world_original_normal_double.z;
-
+            Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
             Basis3f original_basis(original_normal_world);
 
             // World space shading (perturbed) normal in intersection point.
-            const Vector3d& world_preturbed_normal_double = local_geometry.m_shading_point->get_shading_normal();
-            Vector3f perturbed_normal_world;
-            perturbed_normal_world.x = (float) world_preturbed_normal_double.x;
-            perturbed_normal_world.y = (float) world_preturbed_normal_double.y;
-            perturbed_normal_world.z = (float) world_preturbed_normal_double.z;
+            Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
             
             // Local space shading (perturbed) normal in intersection point.
             const Vector3f& perturbed_normal_local = 
@@ -900,6 +863,10 @@ namespace
             return pdf;
         }
 
+        static float pdot(Vector3f a, Vector3f b) {
+	        return std::max(0.0f, dot(a, b));
+        }
+
         static float sin_theta(Vector3f w)
         {
             float sin_theta2 = 1.0 - w.z * w.z;
@@ -924,9 +891,9 @@ namespace
 
         static float lambda_p(Vector3f wp, Vector3f wi)
         {
-            float i_dot_p = dot(wp, wi);
+            float i_dot_p = pdot(wp, wi);
             Vector3f tangent = wt(wp);
-            float t_dot_i = dot(tangent, wi);
+            float t_dot_i = pdot(tangent, wi);
             float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));
             if(isnan(lambda))
                 RENDERER_LOG_INFO("lambda %f", lambda);
@@ -937,9 +904,9 @@ namespace
         {
             float cos_theta_w = std::max(0.0f, cos_theta(w));
             float cos_theta_wp = std::max(0.0f, cos_theta(wp));
-            float w_dot_wp = dot(w, wp);
+            float w_dot_wp = pdot(w, wp);
             Vector3f tangent = wt(wp);
-            float w_dot_wt = dot(w, tangent);
+            float w_dot_wt = pdot(w, tangent);
             float G = std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
             if(isnan(G))
                 RENDERER_LOG_INFO("G %f", G);
