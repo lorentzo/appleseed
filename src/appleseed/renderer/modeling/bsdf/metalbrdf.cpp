@@ -651,6 +651,7 @@ namespace
 
             // World space tangent
             Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_local = original_basis.transform_to_local(tangent_world);
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - Vector3f(2.0) * dot(outgoing, tangent_world) * tangent_world);
