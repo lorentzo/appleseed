@@ -453,7 +453,7 @@ namespace
             }
             else
             {
-               // One reflection on tangent facet.
+               // One reflection on tangent facet. TODO: check -outgoing
                 Vector3f outgoing_reflected_world = 
                     normalize(outgoing.get_value() - Vector3f(2.0) * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
