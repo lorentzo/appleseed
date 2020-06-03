@@ -845,7 +845,7 @@ namespace
                         * (1.0 - G1(perturbed_normal_local, outgoing_reflected_local));
                 }
             }
-            //RENDERER_LOG_INFO(" dot incoming tangent %f", dot(outgoing, tangent_world));
+
             // i -> t -> p -> o
             if(lambda_p(perturbed_normal_local, incoming_local) < 1.0 && dot(incoming, tangent_world) > 1e-6)
             {
@@ -897,7 +897,14 @@ namespace
             float t_dot_i = pdot(tangent, wi);
             float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));
             if(isnan(lambda))
+            {
+                RENDERER_LOG_INFO("wp %f %f %f", wp.x, wp.y, wp.z);
+                RENDERER_LOG_INFO("wi %f %f %f", wi.x, wi.y, wi.z);
+                RENDERER_LOG_INFO("i dot p %f", i_dot_p);
+                RENDERER_LOG_INFO("t dot i %f", t_dot_i);
                 RENDERER_LOG_INFO("lambda %f", lambda);
+            }
+            
             return lambda;
         }
 
