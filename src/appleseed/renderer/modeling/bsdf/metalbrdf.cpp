@@ -442,7 +442,7 @@ namespace
                 {
                     // Incoming reflect on tangent facet.
                     Vector3f incoming_reflected_world = 
-                        normalize(sample.m_incoming.get_value() + Vector3f(2.0) * dot(-sample.m_incoming.get_value(), tangent_world) * tangent_world);
+                        normalize(sample.m_incoming.get_value() - Vector3f(2.0) * dot(sample.m_incoming.get_value(), tangent_world) * tangent_world);
                     
                     Vector3f incoming_reflected_local = 
                         original_basis.transform_to_local(incoming_reflected_world);
@@ -455,7 +455,7 @@ namespace
             {
                // One reflection on tangent facet.
                 Vector3f outgoing_reflected_world = 
-                    normalize(-outgoing.get_value() + Vector3f(2.0) * dot(outgoing.get_value(), tangent_world) * tangent_world);
+                    normalize(outgoing.get_value() - Vector3f(2.0) * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
                 Vector3f outgoing_reflected_local = 
                         original_basis.transform_to_local(outgoing_reflected_world);
@@ -699,6 +699,9 @@ namespace
             final_value += value_ipo  
                         * lambda_p(perturbed_normal_local, incoming_local)
                         * G1(perturbed_normal_local, outgoing_local);
+            
+            if(isnan(lambda_p(perturbed_normal_local, incoming_local)))
+                RENDERER_LOG_ERROR("lambda eval 1 nan");
 
             // i -> p -> t -> o
             if(dot(outgoing, tangent_world) > 0)
@@ -721,6 +724,9 @@ namespace
                     * lambda_p(perturbed_normal_local, incoming_local)
                     * G1(perturbed_normal_local, outgoing_local)
                     * (1.0f - G1(perturbed_normal_local, outgoing_reflected_local));
+                
+                if(isnan(lambda_p(perturbed_normal_local, incoming_local)))
+                    RENDERER_LOG_ERROR("lambda eval 2 nan");
             }
 
             // i -> t -> p -> o
@@ -742,6 +748,9 @@ namespace
                 final_value += value_itpo
                     * (1.0f - lambda_p(perturbed_normal_local, incoming_local))
                     * G1(perturbed_normal_local, outgoing_local);
+                
+                if(isnan(lambda_p(perturbed_normal_local, incoming_local)))
+                    RENDERER_LOG_ERROR("lambda eval 3 nan");
             }
 
             // Microfacet based normal mapping is applied to BRDF value.
@@ -898,10 +907,10 @@ namespace
             float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));
             if(isnan(lambda))
             {
-                RENDERER_LOG_INFO("wp %f %f %f", wp.x, wp.y, wp.z);
-                RENDERER_LOG_INFO("wi %f %f %f", wi.x, wi.y, wi.z);
-                RENDERER_LOG_INFO("i dot p %f", i_dot_p);
-                RENDERER_LOG_INFO("t dot i %f", t_dot_i);
+                //RENDERER_LOG_INFO("wp %f %f %f", wp.x, wp.y, wp.z);
+                //RENDERER_LOG_INFO("wi %f %f %f", wi.x, wi.y, wi.z);
+                //RENDERER_LOG_INFO("i dot p %f", i_dot_p);
+                //RENDERER_LOG_INFO("t dot i %f", t_dot_i);
                 RENDERER_LOG_INFO("lambda %f", lambda);
             }
             
