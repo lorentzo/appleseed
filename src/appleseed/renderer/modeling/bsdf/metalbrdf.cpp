@@ -457,9 +457,6 @@ namespace
                 Vector3f outgoing_reflected_world = 
                     normalize(outgoing.get_value() - Vector3f(2.0) * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
-                Vector3f outgoing_reflected_local = 
-                        original_basis.transform_to_local(outgoing_reflected_world);
-                
                 // Sample the perturbed facet.
                 MicrofacetBRDFHelper<GGXMDF>::sample(
                     sampling_context,
@@ -586,9 +583,6 @@ namespace
                 Vector3f outgoing_reflected_world = 
                     normalize(-outgoing.get_value() + Vector3f(2.0) * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
-                Vector3f outgoing_reflected_local = 
-                        original_basis.transform_to_local(outgoing_reflected_world);
-
                 // Sample the perturbed facet.
                 SpecularBRDFHelper::sample(f, local_geometry, Dual3f(outgoing_reflected_world), sample);
                 value *= sample.m_value.m_glossy;
@@ -651,7 +645,6 @@ namespace
 
             // World space tangent
             Vector3f tangent_world = wt(perturbed_normal_world);
-            Vector3f tangent_local = original_basis.transform_to_local(tangent_world);
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - Vector3f(2.0) * dot(outgoing, tangent_world) * tangent_world);
@@ -661,9 +654,6 @@ namespace
 
             Vector3f incoming_reflected_world =
                 normalize(incoming - Vector3f(2.0) * dot(incoming, tangent_world) * tangent_world);
-
-            Vector3f incoming_reflected_local = 
-                original_basis.transform_to_local(incoming_reflected_world);
 
             // Test local perturbed normal for validity.
             if(cos_theta(perturbed_normal_local) <= 0 
@@ -685,38 +675,33 @@ namespace
             // Calculate pdf and value using perturbed intersection data 
             // and global incoming and outgoing.
             Spectrum value_ipo(0.0);
-            float pdf_ipo =
-                MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                    alpha_x,
-                    alpha_y,
-                    f,
-                    local_geometry,
-                    outgoing,
-                    incoming,
-                    value_ipo);
+            MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                alpha_x,
+                alpha_y,
+                f,
+                local_geometry,
+                outgoing,
+                incoming,
+                value_ipo);
 
             // Apply microfacet based mapping on value.
             final_value += value_ipo  
                         * lambda_p(perturbed_normal_local, incoming_local)
                         * G1(perturbed_normal_local, outgoing_local);
-            
-            if(isnan(lambda_p(perturbed_normal_local, incoming_local)))
-                RENDERER_LOG_ERROR("lambda eval 1 nan");
 
             // i -> p -> t -> o
             if(dot(outgoing, tangent_world) > 0)
             {
                 // Calculate pdf and value using perturbed normal and wi, wor.
                 Spectrum value_ipto(0.0);
-                float pdf_ipto =
-                    MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                        alpha_x,
-                        alpha_y,
-                        f,
-                        local_geometry,
-                        outgoing_reflected_world,
-                        incoming,
-                        value_ipto);
+                MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                    alpha_x,
+                    alpha_y,
+                    f,
+                    local_geometry,
+                    outgoing_reflected_world,
+                    incoming,
+                    value_ipto);
 
                 // Apply microfacet based normal mapping on value.
                 
@@ -724,9 +709,6 @@ namespace
                     * lambda_p(perturbed_normal_local, incoming_local)
                     * G1(perturbed_normal_local, outgoing_local)
                     * (1.0f - G1(perturbed_normal_local, outgoing_reflected_local));
-                
-                if(isnan(lambda_p(perturbed_normal_local, incoming_local)))
-                    RENDERER_LOG_ERROR("lambda eval 2 nan");
             }
 
             // i -> t -> p -> o
@@ -734,23 +716,19 @@ namespace
             {
                 // Calculate pdf and value using perturbed normal and wi, wor.
                 Spectrum value_itpo(0.0);
-                float pdf_itpo =
-                    MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                        alpha_x,
-                        alpha_y,
-                        f,
-                        local_geometry,
-                        outgoing,
-                        incoming_reflected_world,
-                        value_itpo);
+                MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                    alpha_x,
+                    alpha_y,
+                    f,
+                    local_geometry,
+                    outgoing,
+                    incoming_reflected_world,
+                    value_itpo);
                 
                 // Apply microfacet based normal mapping on value.
                 final_value += value_itpo
                     * (1.0f - lambda_p(perturbed_normal_local, incoming_local))
                     * G1(perturbed_normal_local, outgoing_local);
-                
-                if(isnan(lambda_p(perturbed_normal_local, incoming_local)))
-                    RENDERER_LOG_ERROR("lambda eval 3 nan");
             }
 
             // Microfacet based normal mapping is applied to BRDF value.
@@ -804,9 +782,6 @@ namespace
 
             Vector3f incoming_reflected_world =
                 normalize(incoming - Vector3f(2.0) * dot(incoming, tangent_world) * tangent_world);
-
-            Vector3f incoming_reflected_local = 
-                original_basis.transform_to_local(incoming_reflected_world);
 
             // Test perturbed_normal for validity.
             if(cos_theta(perturbed_normal_local) <= 0 
@@ -904,16 +879,7 @@ namespace
             float i_dot_p = pdot(wp, wi);
             Vector3f tangent = wt(wp);
             float t_dot_i = pdot(tangent, wi);
-            float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));
-            if(isnan(lambda))
-            {
-                //RENDERER_LOG_INFO("wp %f %f %f", wp.x, wp.y, wp.z);
-                //RENDERER_LOG_INFO("wi %f %f %f", wi.x, wi.y, wi.z);
-                //RENDERER_LOG_INFO("i dot p %f", i_dot_p);
-                //RENDERER_LOG_INFO("t dot i %f", t_dot_i);
-                RENDERER_LOG_INFO("lambda %f", lambda);
-            }
-            
+            float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta(wp));          
             return lambda;
         }
 
@@ -925,8 +891,6 @@ namespace
             Vector3f tangent = wt(wp);
             float w_dot_wt = pdot(w, tangent);
             float G = std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta(wp)));
-            if(isnan(G))
-                RENDERER_LOG_INFO("G %f", G);
             return G;
         }
     };
