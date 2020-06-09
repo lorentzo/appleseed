@@ -514,7 +514,6 @@ namespace
             BSDFSample&                          sample)
         {
             Spectrum value(1.0);
-            Vector3f local_normal(0.0f, 0.0f, 1.0f);
 
             // Original shading normal and basis.
             Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
@@ -647,9 +646,9 @@ namespace
                 original_basis.transform_to_local(outgoing);
 
             // World space tangent.
-            //Vector3f tangent_world = wt(perturbed_normal_world);
-            Vector3f tangent_local = wt(perturbed_normal_local);
-            Vector3f tangent_world = original_basis.transform_to_parent(tangent_local);
+            Vector3f tangent_world = wt(perturbed_normal_world);
+            //Vector3f tangent_local = wt(perturbed_normal_local);
+            //Vector3f tangent_world = original_basis.transform_to_parent(tangent_local);
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - 2.0f * dot(outgoing, tangent_world) * tangent_world);
@@ -679,9 +678,6 @@ namespace
                     incoming,
                     value_default);
 
-                if (average_value(value_default) < 1e-5)
-                    RENDERER_LOG_INFO("%f", average_value(value_default));
-
                 value.m_glossy = value_default;
                 return pdf_default;
             }
@@ -705,11 +701,11 @@ namespace
                         * G1(perturbed_normal_local, outgoing_local, original_normal_world);
 
             // i -> p -> t -> o
-            if(dot(outgoing_local, tangent_local) > 0.0f)
+            if(dot(outgoing, tangent_world) > 0.0f)
             {
                 // Calculate pdf and value using perturbed normal and wi, wor.
                 Spectrum value_ipto(0.0);
-                MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                final_pdf += MicrofacetBRDFHelper<GGXMDF>::evaluate(
                     alpha_x,
                     alpha_y,
                     f,
@@ -727,11 +723,11 @@ namespace
             }
 
             // i -> t -> p -> o
-            if (dot(incoming_local, tangent_local) > 0.0f)
+            if (dot(incoming, tangent_world) > 0.0f)
             {
                 // Calculate pdf and value using perturbed normal and wi, wor.
                 Spectrum value_itpo(0.0);
-                MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                final_pdf += MicrofacetBRDFHelper<GGXMDF>::evaluate(
                     alpha_x,
                     alpha_y,
                     f,
