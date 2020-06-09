@@ -387,7 +387,9 @@ namespace
                 original_basis.transform_to_local(outgoing.get_value());
 
             // World space tangent.
-            Vector3f tangent_world = wt(perturbed_normal_world);
+            //Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_local = wt(perturbed_normal_local);
+            Vector3f tangent_world = original_basis.transform_to_parent(tangent_local);
 
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_local, original_normal_world) <= 0 // cos theta
@@ -530,7 +532,9 @@ namespace
                 original_basis.transform_to_local(outgoing.get_value());
 
             // World space tangent
-            Vector3f tangent_world = wt(perturbed_normal_world);
+            //Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_local = wt(perturbed_normal_local);
+            Vector3f tangent_world = original_basis.transform_to_parent(tangent_local);
 
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_local, original_normal_world) <= 0 
@@ -643,16 +647,18 @@ namespace
                 original_basis.transform_to_local(outgoing);
 
             // World space tangent.
-            Vector3f tangent_world = wt(perturbed_normal_world);
-            
+            //Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_local = wt(perturbed_normal_local);
+            Vector3f tangent_world = original_basis.transform_to_parent(tangent_local);
+
             Vector3f outgoing_reflected_world = 
-                normalize(outgoing - Vector3f(2.0) * dot(outgoing, tangent_world) * tangent_world);
+                normalize(outgoing - 2.0f * dot(outgoing, tangent_world) * tangent_world);
 
             Vector3f outgoing_reflected_local =
                 original_basis.transform_to_local(outgoing_reflected_world);
 
             Vector3f incoming_reflected_world =
-                normalize(incoming - Vector3f(2.0) * dot(incoming, tangent_world) * tangent_world);
+                normalize(incoming - 2.0f * dot(incoming, tangent_world) * tangent_world);
 
             Vector3f incoming_reflected_local =
                 original_basis.transform_to_local(incoming_reflected_world);
@@ -663,14 +669,21 @@ namespace
                 || std::abs(perturbed_normal_local.y) < 1e-6)
             {
                 // Evaluate using world space incoming, outgoing.
-                return MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                Spectrum value_default(0.0f);
+                float pdf_default = MicrofacetBRDFHelper<GGXMDF>::evaluate(
                     alpha_x,
                     alpha_y,
                     f,
                     local_geometry,
                     outgoing,
                     incoming,
-                    value.m_glossy);
+                    value_default);
+
+                if (average_value(value_default) < 1e-5)
+                    RENDERER_LOG_INFO("%f", average_value(value_default));
+
+                value.m_glossy = value_default;
+                return pdf_default;
             }
             // i -> p -> o
 
@@ -692,7 +705,7 @@ namespace
                         * G1(perturbed_normal_local, outgoing_local, original_normal_world);
 
             // i -> p -> t -> o
-            if(dot(outgoing, tangent_world) > 0.0f)
+            if(dot(outgoing_local, tangent_local) > 0.0f)
             {
                 // Calculate pdf and value using perturbed normal and wi, wor.
                 Spectrum value_ipto(0.0);
@@ -714,7 +727,7 @@ namespace
             }
 
             // i -> t -> p -> o
-            if (dot(incoming, tangent_world) > 0.0f)
+            if (dot(incoming_local, tangent_local) > 0.0f)
             {
                 // Calculate pdf and value using perturbed normal and wi, wor.
                 Spectrum value_itpo(0.0);
@@ -774,7 +787,9 @@ namespace
                 original_basis.transform_to_local(outgoing);
 
             // World space tangent
-            Vector3f tangent_world = wt(perturbed_normal_world);
+            //Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_local = wt(perturbed_normal_local);
+            Vector3f tangent_world = original_basis.transform_to_parent(tangent_local);
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - Vector3f(2.0f) * dot(outgoing, tangent_world) * tangent_world);
@@ -878,7 +893,7 @@ namespace
         }
 
         // Calculate the tangent vector given another vector.
-        static Vector3f wt(Vector3f& wp)
+        static Vector3f wt(const Vector3f& wp)
         {
             return normalize(Vector3f(-wp.x, -wp.y, 0.0f));
         }
