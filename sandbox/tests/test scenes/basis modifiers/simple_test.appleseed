@@ -15,9 +15,9 @@
             <parameter name="shutter_open_end_time" value="0" />
             <transform time="0">
                 <matrix>
-                    1.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000
-                    0.000000000000000 0.438371151685715 -0.898794054985046 1.000000000000000
-                    0.000000000000000 0.898794054985046 0.438371151685715 2.000000000000000
+                    -1.000000000000000 0.000000061817239 -0.000000061817239 0.000000000000000
+                    -0.000000087422777 -0.707106769084930 0.707106769084930 2.250000000000000
+                    0.000000000000000 0.707106769084930 0.707106769084930 2.000000000000000
                     0.000000000000000 0.000000000000000 0.000000000000000 1.000000000000000
                 </matrix>
             </transform>
@@ -26,7 +26,7 @@
         <assembly name="assembly">
             <texture name="normal" model="disk_texture_2d">
                 <parameter name="color_space" value="linear_rgb" />
-                <parameter name="filename" value="sources/paper-normal.png" />
+                <parameter name="filename" value="sources/brickwall_normal.jpg" />
             </texture>
             <texture_instance name="normal_inst" texture="normal">
                 <parameter name="addressing_mode" value="wrap" />
@@ -48,16 +48,7 @@
                 <parameter name="displacement_method" value="normal" />
                 <parameter name="normal_map_up" value="z" />
             </material>
-            <color name="Point.001_radiance">
-                <parameter name="color_space" value="linear_rgb" />
-                <values>
-                    0.800000 0.800000 0.800000
-                </values>
-                <alpha>
-                    1.000000
-                </alpha>
-            </color>
-            <color name="Point_radiance">
+            <color name="Lamp_radiance">
                 <parameter name="color_space" value="linear_rgb" />
                 <values>
                     0.800000 0.800000 0.800000
@@ -73,40 +64,25 @@
                 <parameter name="surface_shader" value="__default_surface_shader" />
             </material>
             <material name="__null_material" model="generic_material" />
-            <light name="Point" model="point_light">
+            <light name="Lamp" model="point_light">
                 <parameter name="cast_indirect_light" value="true" />
                 <parameter name="exposure" value="0" />
                 <parameter name="importance_multiplier" value="1" />
-                <parameter name="intensity" value="Point_radiance" />
+                <parameter name="intensity" value="Lamp_radiance" />
                 <parameter name="intensity_multiplier" value="100" />
                 <transform>
                     <matrix>
-                        1.000000000000000 0.000000000000000 0.000000000000000 2.000000000000000
-                        0.000000000000000 1.000000000000000 0.000000000000000 4.000000000000000
-                        0.000000000000000 0.000000000000000 1.000000000000000 -2.500000000000000
+                        -0.290864646434784 -0.771101295948029 0.566392540931702 0.000000000000000
+                        0.955171167850494 -0.199883535504341 0.218391031026840 0.000000000000000
+                        -0.055189058184624 0.604524075984955 0.794672787189484 1.000000000000000
                         0.000000000000000 0.000000000000000 0.000000000000000 1.000000000000000
                     </matrix>
                 </transform>
             </light>
-            <light name="Point.001" model="point_light">
-                <parameter name="cast_indirect_light" value="true" />
-                <parameter name="exposure" value="0" />
-                <parameter name="importance_multiplier" value="1" />
-                <parameter name="intensity" value="Point.001_radiance" />
-                <parameter name="intensity_multiplier" value="100" />
-                <transform>
-                    <matrix>
-                        1.000000000000000 0.000000000000000 0.000000000000000 -2.000000000000000
-                        0.000000000000000 1.000000000000000 0.000000000000000 4.000000000000000
-                        0.000000000000000 0.000000000000000 1.000000000000000 2.500000000000000
-                        0.000000000000000 0.000000000000000 0.000000000000000 1.000000000000000
-                    </matrix>
-                </transform>
-            </light>
-            <object name="Sphere_obj" model="mesh_object">
-                <parameter name="filename" value="_geometry/269dc9e1b030ac6660acac43727108aa.binarymesh" />
+            <object name="Plane_obj" model="mesh_object">
+                <parameter name="filename" value="_geometry/fefda7f82c3997e4a145d6b572f08e7f.binarymesh" />
             </object>
-            <object_instance name="Sphere" object="Sphere_obj.mesh">
+            <object_instance name="Plane" object="Plane_obj.mesh">
                 <parameter name="medium_priority" value="0" />
                 <parameter name="ray_bias_distance" value="0" />
                 <parameter name="ray_bias_method" value="none" />
@@ -119,14 +95,6 @@
                     <parameter name="specular" value="true" />
                     <parameter name="transparency" value="true" />
                 </parameters>
-                <transform>
-                    <matrix>
-                        0.719846308231354 -0.342020124197006 -0.604022741317749 0.000000000000000
-                        0.262002617120743 0.939692616462708 -0.219846293330193 5.000000000000000
-                        0.642787575721741 0.000000000000000 0.766044437885284 0.000000000000000
-                        0.000000000000000 0.000000000000000 0.000000000000000 1.000000000000000
-                    </matrix>
-                </transform>
                 <assign_material slot="default" side="front" material="metal_mat" />
                 <assign_material slot="default" side="back" material="metal_mat" />
             </object_instance>
@@ -139,13 +107,13 @@
             <parameter name="camera" value="Camera" />
             <parameter name="denoise_scales" value="3" />
             <parameter name="denoiser" value="off" />
-            <parameter name="filter" value="box" />
-            <parameter name="filter_size" value="0.5" />
+            <parameter name="filter" value="blackman-harris" />
+            <parameter name="filter_size" value="1.5" />
             <parameter name="mark_invalid_pixels" value="false" />
             <parameter name="patch_distance_threshold" value="1" />
             <parameter name="prefilter_spikes" value="true" />
             <parameter name="random_pixel_order" value="true" />
-            <parameter name="resolution" value="640 360" />
+            <parameter name="resolution" value="960 540" />
             <parameter name="skip_denoised" value="true" />
             <parameter name="spike_threshold" value="2" />
             <parameter name="tile_size" value="64 64" />
@@ -156,7 +124,7 @@
             <parameter name="lighting_engine" value="pt" />
             <parameter name="passes" value="1" />
             <parameter name="pixel_renderer" value="uniform" />
-            <parameter name="rendering_threads" value="single" />
+            <parameter name="rendering_threads" value="auto" />
             <parameter name="shading_result_framebuffer" value="ephemeral" />
             <parameter name="tile_renderer" value="generic" />
             <parameter name="use_embree" value="false" />
@@ -201,7 +169,7 @@
             <parameters name="uniform_pixel_renderer">
                 <parameter name="decorrelate_pixels" value="true" />
                 <parameter name="force_antialiasing" value="true" />
-                <parameter name="samples" value="1" />
+                <parameter name="samples" value="16" />
             </parameters>
         </configuration>
         <configuration name="interactive" base="base_interactive">
