@@ -26,7 +26,7 @@
         <assembly name="assembly">
             <texture name="normal" model="disk_texture_2d">
                 <parameter name="color_space" value="linear_rgb" />
-                <parameter name="filename" value="sources/brickwall_normal.jpg" />
+                <parameter name="filename" value="sources/simple_normal_map.png" />
             </texture>
             <texture_instance name="normal_inst" texture="normal">
                 <parameter name="addressing_mode" value="wrap" />
