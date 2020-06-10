@@ -140,12 +140,12 @@
             <parameter name="denoise_scales" value="3" />
             <parameter name="denoiser" value="off" />
             <parameter name="filter" value="box" />
-            <parameter name="filter_size" value="0.5" />
+            <parameter name="filter_size" value="1.5" />
             <parameter name="mark_invalid_pixels" value="false" />
             <parameter name="patch_distance_threshold" value="1" />
             <parameter name="prefilter_spikes" value="true" />
             <parameter name="random_pixel_order" value="true" />
-            <parameter name="resolution" value="640 360" />
+            <parameter name="resolution" value="1280 720" />
             <parameter name="skip_denoised" value="true" />
             <parameter name="spike_threshold" value="2" />
             <parameter name="tile_size" value="64 64" />
@@ -201,7 +201,7 @@
             <parameters name="uniform_pixel_renderer">
                 <parameter name="decorrelate_pixels" value="true" />
                 <parameter name="force_antialiasing" value="true" />
-                <parameter name="samples" value="1" />
+                <parameter name="samples" value="16" />
             </parameters>
         </configuration>
         <configuration name="interactive" base="base_interactive">
