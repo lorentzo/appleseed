@@ -510,7 +510,7 @@ namespace
             }
 
             // Intersecting with perturbed facet?
-            if (sampling_context.next2<float>() < lambda_p(perturbed_normal_world, outgoing, original_normal_world))
+            if (sampling_context.next2<float>() < lambda_p(perturbed_normal_world, outgoing.get_value(), original_normal_world))
             {
                 // Sample facet with perturbed normal
                 SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
@@ -522,7 +522,7 @@ namespace
                     return;
                 }
 
-                float G1_value = G1(perturbed_normal_world, incoming, original_normal_world); 
+                float G1_value = G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world); 
                 
                 // Is the sampled direction shadowed?
                 if (sampling_context.next2<float>() > G1_value)
@@ -572,8 +572,7 @@ namespace
             const FresnelConductorSchlickLazanyi f)
         {
             Spectrum final_value(0.0);
-            float final_pdf = 0.0;
-
+            
             // Original shading normal and basis.
             Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal()); 
 
