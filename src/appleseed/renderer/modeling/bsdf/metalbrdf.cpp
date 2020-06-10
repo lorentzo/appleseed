@@ -308,7 +308,7 @@ namespace
                 alpha_x,
                 alpha_y);
 
-            float pdf = 0.0;
+            float pdf = 0.0f;
             bool use_microfacet_normal_mapping = true;
             if (use_microfacet_normal_mapping)
             {
@@ -378,7 +378,7 @@ namespace
             Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // World space tangent.
-            Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_world = Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f);
 
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 // cos theta
@@ -498,7 +498,7 @@ namespace
             Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // World space tangent
-            Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_world = Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f);
 
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 
@@ -580,7 +580,7 @@ namespace
             Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // World space tangent.
-            Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_world = Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f);
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - 2.0f * dot(outgoing, tangent_world) * tangent_world);
@@ -593,7 +593,6 @@ namespace
                 || std::abs(perturbed_normal_world.x) < 1e-6
                 || std::abs(perturbed_normal_world.y) < 1e-6)
             {
-                //RENDERER_LOG_ERROR("Using default BRDF");
                 // Evaluate using world space incoming, outgoing.
                 Spectrum value_default(0.0f);
                 float pdf_default = MicrofacetBRDFHelper<GGXMDF>::evaluate(
@@ -610,7 +609,7 @@ namespace
             }
 
             // i -> p -> o
-            Spectrum value_ipo(0.0);
+            Spectrum value_ipo(0.0f);
             MicrofacetBRDFHelper<GGXMDF>::evaluate(
                 alpha_x,
                 alpha_y,
@@ -628,7 +627,7 @@ namespace
             // i -> p -> t -> o
             if(dot(outgoing, tangent_world) > 0.0f)
             {
-                Spectrum value_ipto(0.0);
+                Spectrum value_ipto(0.0f);
                 MicrofacetBRDFHelper<GGXMDF>::evaluate(
                     alpha_x,
                     alpha_y,
@@ -648,7 +647,7 @@ namespace
             // i -> t -> p -> o
             if (dot(incoming, tangent_world) > 0.0f)
             {
-                Spectrum value_itpo(0.0);
+                Spectrum value_itpo(0.0f);
                 MicrofacetBRDFHelper<GGXMDF>::evaluate(
                     alpha_x,
                     alpha_y,
@@ -692,7 +691,7 @@ namespace
             Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // World space tangent.
-            Vector3f tangent_world = wt(perturbed_normal_world);
+            Vector3f tangent_world = Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f);
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - 2.0f * dot(outgoing, tangent_world) * tangent_world);
@@ -774,34 +773,10 @@ namespace
             return std::sqrt(1.0f - cos_theta * cos_theta);
         }
 
-        // Assuming that the given direction is in the local coordinate
-        // system, return the sine of the angle between the normal and w.
-        static float sin_theta(Vector3f w)
-        {
-            float sin_theta2 = 1.0 - w.z * w.z;
-            if (sin_theta2 <= 0.0)
-                return 0.0;
-            return std::sqrt(sin_theta2);
-        }
- 
-        // Assuming that the given direction is in the local coordinate
-        // system, return the cosine of the angle between the normal and v.
-        // See /include/mitsuba/core/frame.h.
-        static float cos_theta(Vector3f w)
-        {
-            return w.z;
-        }
-
-        // Calculate the tangent vector given another vector.
-        static Vector3f wt(const Vector3f& wp)
-        {
-            return normalize(Vector3f(-wp.x, -wp.y, 0.0f));
-        }
-
         static float lambda_p(Vector3f wp, Vector3f wi, Vector3f wg)
         {
             float i_dot_p = pdot(wp, wi);
-            Vector3f tangent = wt(wp);
+            Vector3f tangent = Vector3f(-wp.x, -wp.y, 0.0f);
             float t_dot_i = pdot(tangent, wi);
             float cos_theta_wp = pdot(wg, wp); // cos(theta)
             float sin_theta_wp = sin_theta(cos_theta_wp);
@@ -815,7 +790,7 @@ namespace
             float cos_theta_wp = pdot(wp, wg);
             float sin_theta_wp = sin_theta(cos_theta_wp);
             float w_dot_wp = pdot(w, wp);
-            Vector3f tangent = wt(wp);
+            Vector3f tangent = Vector3f(-wp.x, -wp.y, 0.0f);
             float w_dot_wt = pdot(w, tangent);
             float G = std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta_wp));
             return G;
