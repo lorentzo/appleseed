@@ -437,7 +437,7 @@ namespace
             {
                // One reflection on tangent facet. TODO: check -outgoing
                 Vector3f outgoing_reflected_world = 
-                    normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
+                    normalize(-outgoing.get_value() + 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
                 // Sample the perturbed facet.
                 MicrofacetBRDFHelper<GGXMDF>::sample(
@@ -529,7 +529,7 @@ namespace
                 {
                     // Reflect on tangent facet.
                     Vector3f incoming_reflected_world = 
-                        normalize(sample.m_incoming.get_value() - Vector3f(2.0) * dot(sample.m_incoming.get_value(), tangent_world) * tangent_world);
+                        normalize(sample.m_incoming.get_value() - 2.0f * dot(sample.m_incoming.get_value(), tangent_world) * tangent_world);
 
                     value *= G1(perturbed_normal_world, incoming_reflected_world, original_normal_world);
                 }
@@ -538,7 +538,7 @@ namespace
             {
                 // One reflection on tangent facet.
                 Vector3f outgoing_reflected_world = 
-                    normalize(outgoing.get_value() - Vector3f(2.0) * dot(outgoing.get_value(), tangent_world) * tangent_world);
+                    normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
                 // Sample the perturbed facet.
                 SpecularBRDFHelper::sample(f, local_geometry, Dual3f(outgoing_reflected_world), sample);
@@ -572,7 +572,7 @@ namespace
             const FresnelConductorSchlickLazanyi f)
         {
             Spectrum final_value(0.0);
-            
+
             // Original shading normal and basis.
             Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal()); 
 
@@ -760,7 +760,7 @@ namespace
                 
                 // Apply microfacet based normal mapping on pdf.
                 pdf += pdf_itpo
-                    * (1.0 - lambda_p(perturbed_normal_world, incoming, original_normal_world));
+                    * (1.0f - lambda_p(perturbed_normal_world, incoming, original_normal_world));
             }
             return pdf;
         }
