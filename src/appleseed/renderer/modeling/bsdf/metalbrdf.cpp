@@ -369,7 +369,7 @@ namespace
             const foundation::Dual3f&       outgoing,
             BSDFSample&                     sample)
         {
-            Spectrum value(1.0);
+            Spectrum value(1.0f);
 
             // Original shading normal and basis.
             Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
@@ -571,7 +571,7 @@ namespace
             float                                alpha_y,
             const FresnelConductorSchlickLazanyi f)
         {
-            Spectrum final_value(0.0);
+            Spectrum final_value(0.0f);
 
             // Original shading normal and basis.
             Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal()); 
@@ -683,7 +683,7 @@ namespace
             float                                alpha_x,
             float                                alpha_y)
         {
-            float pdf = 0.0;
+            float pdf = 0.0f;
 
             // Original shading normal and basis.
             Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
