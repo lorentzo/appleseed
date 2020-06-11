@@ -208,7 +208,7 @@ namespace
                     outgoing,
                     sample);
                 }
-                
+
                 if (sample.get_mode() != ScatteringMode::None)
                 {
                     apply_energy_compensation_factor(
@@ -378,7 +378,7 @@ namespace
             Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // World space tangent.
-            Vector3f tangent_world = Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f);
+            Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
 
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 // cos theta
@@ -422,7 +422,7 @@ namespace
                 }
                 // Sampling direction shadowed?
                 float G1_value = G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world);
-                
+
                 // Is the sampled direction shadowed?
                 if (sampling_context.next2<float>() > G1_value)
                 {
@@ -435,7 +435,9 @@ namespace
             }
             else
             {
-               // One reflection on tangent facet. TODO: check -outgoing
+               // This part of code could fix the black regions.
+               // One reflection on tangent facet. 
+               // TODO: check -outgoing
                 Vector3f outgoing_reflected_world = 
                     normalize(-outgoing.get_value() + 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
@@ -498,7 +500,7 @@ namespace
             Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // World space tangent
-            Vector3f tangent_world = Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f);
+            Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
 
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 
@@ -580,7 +582,7 @@ namespace
             Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // World space tangent.
-            Vector3f tangent_world = Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f);
+            Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - 2.0f * dot(outgoing, tangent_world) * tangent_world);
@@ -691,7 +693,7 @@ namespace
             Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
 
             // World space tangent.
-            Vector3f tangent_world = Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f);
+            Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
 
             Vector3f outgoing_reflected_world = 
                 normalize(outgoing - 2.0f * dot(outgoing, tangent_world) * tangent_world);
@@ -776,11 +778,11 @@ namespace
         static float lambda_p(Vector3f wp, Vector3f wi, Vector3f wg)
         {
             float i_dot_p = pdot(wp, wi);
-            Vector3f tangent = Vector3f(-wp.x, -wp.y, 0.0f);
+            Vector3f tangent = normalize(Vector3f(-wp.x, -wp.y, 0.0f));
             float t_dot_i = pdot(tangent, wi);
             float cos_theta_wp = pdot(wg, wp); // cos(theta)
             float sin_theta_wp = sin_theta(cos_theta_wp);
-            float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta_wp);          
+            float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta_wp);        
             return lambda;
         }
 
@@ -790,7 +792,7 @@ namespace
             float cos_theta_wp = pdot(wp, wg);
             float sin_theta_wp = sin_theta(cos_theta_wp);
             float w_dot_wp = pdot(w, wp);
-            Vector3f tangent = Vector3f(-wp.x, -wp.y, 0.0f);
+            Vector3f tangent = normalize(Vector3f(-wp.x, -wp.y, 0.0f));
             float w_dot_wt = pdot(w, tangent);
             float G = std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta_wp));
             return G;
