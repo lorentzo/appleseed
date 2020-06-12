@@ -420,11 +420,9 @@ namespace
                     sample.m_value.m_glossy = value;
                     return;
                 }
-                // Sampling direction shadowed?
-                float G1_value = G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world);
 
                 // Is the sampled direction shadowed?
-                if (sampling_context.next2<float>() > G1_value)
+                if (sampling_context.next2<float>() > G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world))
                 {
                     // Incoming reflect on tangent facet.
                     Vector3f incoming_reflected_world = 
@@ -435,7 +433,6 @@ namespace
             }
             else
             {
-               // This part of code could fix the black regions.
                // One reflection on tangent facet. 
                // TODO: check -outgoing
                 Vector3f outgoing_reflected_world = 
@@ -524,10 +521,8 @@ namespace
                     return;
                 }
 
-                float G1_value = G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world); 
-                
                 // Is the sampled direction shadowed?
-                if (sampling_context.next2<float>() > G1_value)
+                if (sampling_context.next2<float>() > G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world))
                 {
                     // Reflect on tangent facet.
                     Vector3f incoming_reflected_world = 
