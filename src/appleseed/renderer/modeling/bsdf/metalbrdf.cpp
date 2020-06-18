@@ -49,6 +49,7 @@
 #include "foundation/math/vector.h"
 #include "foundation/utility/api/specializedapiarrays.h"
 #include "foundation/utility/makevector.h"
+#include "renderer/utility/shadowterminator.h"
 
 // Standard headers.
 #include <algorithm>
@@ -380,6 +381,9 @@ namespace
             // World space tangent.
             Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
 
+            const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
+
+            /*
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 // cos theta
                 || std::abs(perturbed_normal_world.x) < 1e-6
@@ -396,9 +400,9 @@ namespace
                     sample);
                 return;
             }
+            */
 
-            // Intersecting with perturbed facet?
-            // Appleseed sample() is using outgoing for "incoming".
+            // View intersecting with perturbed facet.
             if (sampling_context.next2<float>() < lambda_p(perturbed_normal_world, outgoing.get_value(), original_normal_world))
             {
                 // Sample facet with perturbed normal.
@@ -426,17 +430,19 @@ namespace
                 {
                     // Incoming reflect on tangent facet.
                     Vector3f incoming_reflected_world = 
-                        normalize(sample.m_incoming.get_value() - 2.0f * dot(sample.m_incoming.get_value(), tangent_world) * tangent_world);
+                        normalize(sample.m_incoming.get_value() -2.0f * dot(sample.m_incoming.get_value(), tangent_world) * tangent_world);
 
-                    value *= G1(perturbed_normal_world, incoming_reflected_world, original_normal_world);
+                    value = value 
+                        * shift_cos_in_fast(mdot(incoming_reflected_world, perturbed_normal_world), shadow_terminator_freq_mult)
+                        * G1(perturbed_normal_world, incoming_reflected_world, original_normal_world);
                 }
             }
             else
             {
-               // One reflection on tangent facet. 
+               // View intersecting with tangent facet. 
                // TODO: check -outgoing
                 Vector3f outgoing_reflected_world = 
-                    normalize(-outgoing.get_value() + 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
+                    normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
                 // Sample the perturbed facet.
                 MicrofacetBRDFHelper<GGXMDF>::sample(
@@ -457,7 +463,9 @@ namespace
                     return;
                 }
 
-                value *= G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world);
+                value = value 
+                    * shift_cos_in_fast(mdot(sample.m_incoming.get_value(), perturbed_normal_world), shadow_terminator_freq_mult)
+                    * G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world);
             }
 
             if (dot(sample.m_incoming.get_value(), original_normal_world) <= 0.0f)
@@ -499,6 +507,7 @@ namespace
             // World space tangent
             Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
 
+            /*
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 
                 || std::abs(perturbed_normal_world.x) < 1e-6
@@ -507,6 +516,7 @@ namespace
                 SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
                 return;
             }
+            */
 
             // Intersecting with perturbed facet?
             if (sampling_context.next2<float>() < lambda_p(perturbed_normal_world, outgoing.get_value(), original_normal_world))
@@ -528,7 +538,9 @@ namespace
                     Vector3f incoming_reflected_world = 
                         normalize(sample.m_incoming.get_value() - 2.0f * dot(sample.m_incoming.get_value(), tangent_world) * tangent_world);
 
-                    value *= G1(perturbed_normal_world, incoming_reflected_world, original_normal_world);
+                    value = value 
+                        * mdot(incoming_reflected_world, perturbed_normal_world)
+                        * G1(perturbed_normal_world, incoming_reflected_world, original_normal_world);
                 }
             }
             else
@@ -546,7 +558,9 @@ namespace
                     sample.m_value.m_glossy = value;
                     return;
                 }
-                value *= G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world);
+                value = value 
+                    * mdot(sample.m_incoming.get_value(), perturbed_normal_world)
+                    * G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world);
             }
             if (dot(sample.m_incoming.get_value(), original_normal_world) <= 0.0f)
             {
@@ -585,7 +599,10 @@ namespace
             Vector3f incoming_reflected_world =
                 normalize(incoming - 2.0f * dot(incoming, tangent_world) * tangent_world);
 
-            // Test local perturbed normal for validity.
+            const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
+
+            /*
+            // TODO Test local perturbed normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 // cos theta
                 || std::abs(perturbed_normal_world.x) < 1e-6
                 || std::abs(perturbed_normal_world.y) < 1e-6)
@@ -604,6 +621,7 @@ namespace
                 value.m_glossy = value_default;
                 return pdf_default;
             }
+            */
 
             // i -> p -> o
             Spectrum value_ipo(0.0f);
@@ -617,12 +635,13 @@ namespace
                 value_ipo);
 
             // Apply microfacet based mapping on value.
-            final_value += value_ipo
-                        * lambda_p(perturbed_normal_world, incoming, original_normal_world)
-                        * G1(perturbed_normal_world, outgoing, original_normal_world);
+            final_value += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
+                        * value_ipo
+                        * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
+                        * G1(perturbed_normal_world, incoming, original_normal_world);
 
             // i -> p -> t -> o
-            if(dot(outgoing, tangent_world) > 0.0f)
+            if(dot(incoming, tangent_world) > 0.0f)
             {
                 Spectrum value_ipto(0.0f);
                 MicrofacetBRDFHelper<GGXMDF>::evaluate(
@@ -630,19 +649,20 @@ namespace
                     alpha_y,
                     f,
                     local_geometry,
-                    outgoing_reflected_world,
-                    incoming,
+                    outgoing,
+                    incoming_reflected_world,
                     value_ipto);
 
                 // Apply microfacet based normal mapping on value.
-                final_value += value_ipto
-                     * lambda_p(perturbed_normal_world, incoming, original_normal_world)
-                     * G1(perturbed_normal_world, outgoing, original_normal_world)
-                     * (1.0f - G1(perturbed_normal_world, outgoing_reflected_world, original_normal_world));
+                final_value += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
+                     * value_ipto
+                     * shift_cos_in_fast(mdot(incoming_reflected_world, perturbed_normal_world), shadow_terminator_freq_mult)
+                     * (1.0f - G1(perturbed_normal_world, incoming_reflected_world, original_normal_world))
+                     * G1(tangent_world, incoming, original_normal_world); // code G1(incoming, wp)?
             }
 
             // i -> t -> p -> o
-            if (dot(incoming, tangent_world) > 0.0f)
+            if (dot(outgoing, tangent_world) > 0.0f)
             {
                 Spectrum value_itpo(0.0f);
                 MicrofacetBRDFHelper<GGXMDF>::evaluate(
@@ -650,14 +670,16 @@ namespace
                     alpha_y,
                     f,
                     local_geometry,
-                    outgoing,
-                    incoming_reflected_world,
+                    outgoing_reflected_world,
+                    incoming,
                     value_itpo);
 
                 // Apply microfacet based normal mapping on value.
-                final_value += value_itpo
-                    * (1.0f - lambda_p(perturbed_normal_world, incoming, original_normal_world))
-                    * G1(perturbed_normal_world, outgoing, original_normal_world);
+                final_value += (1.0f - lambda_p(perturbed_normal_world, outgoing, original_normal_world)) // lambda_t
+                    * value_itpo
+                    * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
+                    * G1(perturbed_normal_world, incoming, original_normal_world)
+                    * (1.0f - G1(tangent_world, outgoing_reflected_world, original_normal_world)); // should be 1.0f
             }
 
             // Microfacet based normal mapping is applied to BRDF value.
@@ -696,6 +718,9 @@ namespace
             Vector3f incoming_reflected_world =
                 normalize(incoming - 2.0f * dot(incoming, tangent_world) * tangent_world);
 
+            const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
+
+            /*
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 
                 || std::abs(perturbed_normal_world.x) < 1e-6
@@ -708,9 +733,10 @@ namespace
                         outgoing,
                         incoming);
             }
+            */
             
             // i -> p -> o
-            if (lambda_p(perturbed_normal_world, incoming, original_normal_world) > 0.0f)
+            if (lambda_p(perturbed_normal_world, outgoing, original_normal_world) > 0.0f)
             {
                 const float pdf_ipo =
                     MicrofacetBRDFHelper<GGXMDF>::pdf(
@@ -721,48 +747,59 @@ namespace
                         incoming);
 
                 // Apply microfacet based normal mapping on pdf.
-                pdf += pdf_ipo
-                    * lambda_p(perturbed_normal_world, incoming, original_normal_world)
-                    * G1(perturbed_normal_world, outgoing, original_normal_world);
+                pdf += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
+                    * pdf_ipo
+                    * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
+                    * G1(perturbed_normal_world, incoming, original_normal_world);
 
                 // i -> p -> t -> o
-                if(dot(outgoing, tangent_world) > 1e-6)
+                if(dot(incoming, tangent_world) > 1e-6)
                 {
                     const float pdf_ipto =
                         MicrofacetBRDFHelper<GGXMDF>::pdf(
                             alpha_x,
                             alpha_y,
                             local_geometry,
-                            outgoing_reflected_world,
-                            incoming);
+                            outgoing,
+                            incoming_reflected_world);
 
                     // Apply microfacet based normal mapping on pdf.
-                    pdf += pdf_ipto
-                        * lambda_p(perturbed_normal_world, incoming, original_normal_world)
-                        * (1.0 - G1(perturbed_normal_world, outgoing_reflected_world, original_normal_world));
+                    pdf += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
+                        * pdf_ipto
+                        * shift_cos_in_fast(mdot(incoming_reflected_world, perturbed_normal_world), shadow_terminator_freq_mult)
+                        * (1.0 - G1(perturbed_normal_world, incoming_reflected_world, original_normal_world))
+                        * G1(tangent_world, incoming, original_normal_world); // should be 1.0?
                 }
             }
 
             // i -> t -> p -> o
-            if(lambda_p(perturbed_normal_world, incoming, original_normal_world) < 1.0f && dot(incoming, tangent_world) > 1e-6)
+            if(lambda_p(perturbed_normal_world, outgoing, original_normal_world) < 1.0f && dot(outgoing, tangent_world) > 1e-6)
             {
                 const float pdf_itpo =
                     MicrofacetBRDFHelper<GGXMDF>::pdf(
                         alpha_x,
                         alpha_y,
                         local_geometry,
-                        outgoing,
-                        incoming_reflected_world);
+                        outgoing_reflected_world,
+                        incoming);
                 
                 // Apply microfacet based normal mapping on pdf.
-                pdf += pdf_itpo
-                    * (1.0f - lambda_p(perturbed_normal_world, incoming, original_normal_world));
+                pdf += (1.0f - lambda_p(perturbed_normal_world, outgoing, original_normal_world)) // lambda_t
+                    * pdf_itpo
+                    * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
+                    * G1(perturbed_normal_world, incoming, original_normal_world) // should be 1.0f?
+                    * (1.0f - G1(tangent_world, outgoing_reflected_world, original_normal_world)); // should be 1.0f
             }
             return pdf;
         }
 
         static float pdot(Vector3f a, Vector3f b) {
 	        return std::max(0.0f, dot(a, b));
+        }
+
+        static float mdot(Vector3f a, Vector3f b)
+        {
+            return std::min(std::abs(foundation::dot(a, b)), 1.0f);
         }
 
         static float sin_theta(float cos_theta)

@@ -176,7 +176,7 @@ void BSDFWrapper<BSDFImpl, Cull>::sample(
         //             (sample.m_probability > 0.0f && ref_probability == 0.0f));  // todo: this case is worrisome!
         // #endif
 
-        if (cosine_mult)
+        if (false)
         {
             if (adjoint)
             {
@@ -210,7 +210,7 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
     assert(foundation::is_normalized(outgoing));
     assert(foundation::is_normalized(incoming));
 
-    if (Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    if (false && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
     const float probability =
@@ -229,7 +229,7 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
     {
         assert(value.is_valid());
 
-        if (cosine_mult)
+        if (false)
         {
             if (adjoint)
             {
@@ -263,7 +263,7 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate_pdf(
     assert(foundation::is_normalized(outgoing));
     assert(foundation::is_normalized(incoming));
 
-    if (Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    if (false && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
     const float probability =
