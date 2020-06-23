@@ -360,6 +360,12 @@ namespace
             }
         }
 
+        //
+        // Based on Microfacet based normal mapping (Heitz et al.).
+        // paper/mitsuba wi -> outgoing appleseed.
+        // paper/mitsuba wo -> incoming appleseed.
+        //
+
         static void sample_microfacet_based_normal_mapping_glossy(
             SamplingContext&                sampling_context,
             const float                     roughness,
@@ -384,7 +390,7 @@ namespace
             const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
             /*
-            // Test perturbed_normal for validity.
+            // TODO: probably can be safely removed.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 // cos theta
                 || std::abs(perturbed_normal_world.x) < 1e-6
                 || std::abs(perturbed_normal_world.y) < 1e-6)
@@ -402,7 +408,7 @@ namespace
             }
             */
 
-            // View intersecting with perturbed facet.
+            // View intersecting with perturbed facet. i -> p -> t -> o
             if (sampling_context.next2<float>() < lambda_p(perturbed_normal_world, outgoing.get_value(), original_normal_world))
             {
                 // Sample facet with perturbed normal.
@@ -439,10 +445,10 @@ namespace
             }
             else
             {
-               // View intersecting with tangent facet. 
+               // View intersecting with tangent facet. i -> t -> p -> o
                // TODO: check -outgoing
                 Vector3f outgoing_reflected_world = 
-                    normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
+                    normalize(-outgoing.get_value() + 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
                 
                 // Sample the perturbed facet.
                 MicrofacetBRDFHelper<GGXMDF>::sample(
@@ -478,7 +484,6 @@ namespace
             sample.m_value.m_glossy = value;
 
             // In glosy case, pdf should be modified. 
-            // TODO: call it here?
             float pdf = evaluate_pdf_microfacet_based_normal_mapping(
                 local_geometry,
                 outgoing.get_value(),
@@ -508,7 +513,7 @@ namespace
             Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
 
             /*
-            // Test perturbed_normal for validity.
+            // TODO: probably can be safely removed.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 
                 || std::abs(perturbed_normal_world.x) < 1e-6
                 || std::abs(perturbed_normal_world.y) < 1e-6)
@@ -584,7 +589,7 @@ namespace
         {
             Spectrum final_value(0.0f);
 
-            // Original shading normal and basis.
+            // World space original shading normal.
             Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal()); 
 
             // World space shading (perturbed) normal in intersection point.
@@ -602,7 +607,7 @@ namespace
             const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
             /*
-            // TODO Test local perturbed normal for validity.
+            // TODO: probably can be safely removed
             if(dot(perturbed_normal_world, original_normal_world) <= 0 // cos theta
                 || std::abs(perturbed_normal_world.x) < 1e-6
                 || std::abs(perturbed_normal_world.y) < 1e-6)
@@ -638,7 +643,7 @@ namespace
             final_value += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
                         * value_ipo
                         * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
-                        * G1(perturbed_normal_world, incoming, original_normal_world);
+                        * G1(perturbed_normal_world, incoming, original_normal_world); // only wp is visible
 
             // i -> p -> t -> o
             if(dot(incoming, tangent_world) > 0.0f)
@@ -655,10 +660,10 @@ namespace
 
                 // Apply microfacet based normal mapping on value.
                 final_value += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
-                     * value_ipto
-                     * shift_cos_in_fast(mdot(incoming_reflected_world, perturbed_normal_world), shadow_terminator_freq_mult)
-                     * (1.0f - G1(perturbed_normal_world, incoming_reflected_world, original_normal_world))
-                     * G1(tangent_world, incoming, original_normal_world); // code G1(incoming, wp)?
+                    * value_ipto
+                    * shift_cos_in_fast(mdot(incoming_reflected_world, perturbed_normal_world), shadow_terminator_freq_mult)
+                    * (1.0f - G1(perturbed_normal_world, incoming_reflected_world, original_normal_world)) // 1-G
+                    * (G1(perturbed_normal_world, incoming, original_normal_world)); // only wt is visible (fig6)
             }
 
             // i -> t -> p -> o
@@ -678,20 +683,22 @@ namespace
                 final_value += (1.0f - lambda_p(perturbed_normal_world, outgoing, original_normal_world)) // lambda_t
                     * value_itpo
                     * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
-                    * G1(perturbed_normal_world, incoming, original_normal_world)
-                    * (1.0f - G1(tangent_world, outgoing_reflected_world, original_normal_world)); // should be 1.0f
+                    * G1(perturbed_normal_world, incoming, original_normal_world);
+                    //* (1.0f - G1(perturbed_normal_world, outgoing_reflected_world, original_normal_world)); // should be 1.0f
             }
 
             // Microfacet based normal mapping is applied to BRDF value.
             value.m_glossy = final_value;
 
             // Applye microfacet based normal mapping to pdf.
-            return evaluate_pdf_microfacet_based_normal_mapping(
+            float pdf = evaluate_pdf_microfacet_based_normal_mapping(
                 local_geometry,
                 outgoing,
                 incoming,
                 alpha_x,
                 alpha_y);
+            
+            return pdf;
         }
 
         static float evaluate_pdf_microfacet_based_normal_mapping(
@@ -718,9 +725,7 @@ namespace
             Vector3f incoming_reflected_world =
                 normalize(incoming - 2.0f * dot(incoming, tangent_world) * tangent_world);
 
-            const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
-
-            /*
+            /* TODO: probably can be safely removed.
             // Test perturbed_normal for validity.
             if(dot(perturbed_normal_world, original_normal_world) <= 0 
                 || std::abs(perturbed_normal_world.x) < 1e-6
@@ -749,7 +754,6 @@ namespace
                 // Apply microfacet based normal mapping on pdf.
                 pdf += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
                     * pdf_ipo
-                    * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
                     * G1(perturbed_normal_world, incoming, original_normal_world);
 
                 // i -> p -> t -> o
@@ -766,9 +770,8 @@ namespace
                     // Apply microfacet based normal mapping on pdf.
                     pdf += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
                         * pdf_ipto
-                        * shift_cos_in_fast(mdot(incoming_reflected_world, perturbed_normal_world), shadow_terminator_freq_mult)
-                        * (1.0 - G1(perturbed_normal_world, incoming_reflected_world, original_normal_world))
-                        * G1(tangent_world, incoming, original_normal_world); // should be 1.0?
+                        * (G1(perturbed_normal_world, incoming, original_normal_world))
+                        * (1.0f - G1(perturbed_normal_world, incoming_reflected_world, original_normal_world));
                 }
             }
 
@@ -785,10 +788,9 @@ namespace
                 
                 // Apply microfacet based normal mapping on pdf.
                 pdf += (1.0f - lambda_p(perturbed_normal_world, outgoing, original_normal_world)) // lambda_t
-                    * pdf_itpo
-                    * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
-                    * G1(perturbed_normal_world, incoming, original_normal_world) // should be 1.0f?
-                    * (1.0f - G1(tangent_world, outgoing_reflected_world, original_normal_world)); // should be 1.0f
+                    * pdf_itpo;
+                    //* G1(perturbed_normal_world, incoming, original_normal_world) // should be 1.0f?
+                    //* (1.0f - G1(tangent_world, outgoing_reflected_world, original_normal_world)); // should be 1.0f
             }
             return pdf;
         }
