@@ -49,7 +49,6 @@
 #include "foundation/math/vector.h"
 #include "foundation/utility/api/specializedapiarrays.h"
 #include "foundation/utility/makevector.h"
-#include "renderer/utility/shadowterminator.h"
 
 // Standard headers.
 #include <algorithm>
@@ -161,17 +160,10 @@ namespace
             {
                 if (ScatteringMode::has_specular(modes))
                 {
-                    bool use_microfacet_normal_mapping = true;
-                    if(use_microfacet_normal_mapping)
-                    {
-                        sample_microfacet_based_normal_mapping_specular(sampling_context, f, local_geometry, outgoing, sample);
-                    }
-                    else
-                    {
-                        SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
-                    }
+                    SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
                     sample.m_value.m_beauty = sample.m_value.m_glossy;
                 }
+
                 return;
             }
 
@@ -184,22 +176,7 @@ namespace
                     alpha_x,
                     alpha_y);
 
-                bool use_microfacet_normal_mapping = true;
-                if(use_microfacet_normal_mapping)
-                {
-                    sample_microfacet_based_normal_mapping_glossy(
-                        sampling_context,
-                        values->m_roughness,
-                        alpha_x,
-                        alpha_y,
-                        f,
-                        local_geometry,
-                        outgoing,
-                        sample);
-                }
-                else
-                {
-                    MicrofacetBRDFHelper<GGXMDF>::sample(
+                MicrofacetBRDFHelper<GGXMDF>::sample(
                     sampling_context,
                     values->m_roughness,
                     alpha_x,
@@ -208,7 +185,6 @@ namespace
                     local_geometry,
                     outgoing,
                     sample);
-                }
 
                 if (sample.get_mode() != ScatteringMode::None)
                 {
@@ -252,30 +228,15 @@ namespace
                 values->m_precomputed.m_a,
                 values->m_reflectance_multiplier);
 
-            bool use_microfacet_normal_mapping = true;
-            float pdf = 0.0;
-            if (use_microfacet_normal_mapping)
-            {
-                pdf = evaluate_microfacet_based_normal_mapping(
+            const float pdf =
+                MicrofacetBRDFHelper<GGXMDF>::evaluate(
+                    alpha_x,
+                    alpha_y,
+                    f,
                     local_geometry,
                     outgoing,
                     incoming,
-                    value,
-                    alpha_x,
-                    alpha_y,
-                    f);
-            } 
-            else {
-                pdf =
-                    MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                        alpha_x,
-                        alpha_y,
-                        f,
-                        local_geometry,
-                        outgoing,
-                        incoming,
-                        value.m_glossy);
-            }
+                    value.m_glossy);
 
             apply_energy_compensation_factor(
                 values,
@@ -309,28 +270,14 @@ namespace
                 alpha_x,
                 alpha_y);
 
-            float pdf = 0.0f;
-            bool use_microfacet_normal_mapping = true;
-            if (use_microfacet_normal_mapping)
-            {
-                pdf =
-                    evaluate_pdf_microfacet_based_normal_mapping(
-                        local_geometry,
-                        outgoing,
-                        incoming,
-                        alpha_x,
-                        alpha_y);
-            }
-            else
-            {
-                pdf =
-                    MicrofacetBRDFHelper<GGXMDF>::pdf(
-                        alpha_x,
-                        alpha_y,
-                        local_geometry,
-                        outgoing,
-                        incoming);
-            }
+            const float pdf =
+                MicrofacetBRDFHelper<GGXMDF>::pdf(
+                    alpha_x,
+                    alpha_y,
+                    local_geometry,
+                    outgoing,
+                    incoming);
+
             assert(pdf >= 0.0f);
             return pdf;
         }
@@ -358,478 +305,6 @@ namespace
                 fms += Spectrum(1.0f);
                 value *= fms;
             }
-        }
-
-        //
-        // Based on Microfacet based normal mapping (Heitz et al.).
-        // paper/mitsuba wi -> outgoing appleseed.
-        // paper/mitsuba wo -> incoming appleseed.
-        //
-
-        static void sample_microfacet_based_normal_mapping_glossy(
-            SamplingContext&                sampling_context,
-            const float                     roughness,
-            const float                     alpha_x,
-            const float                     alpha_y,
-            FresnelConductorSchlickLazanyi  f,
-            const BSDF::LocalGeometry&      local_geometry,
-            const foundation::Dual3f&       outgoing,
-            BSDFSample&                     sample)
-        {
-            Spectrum value(1.0f);
-
-            // Original shading normal and basis.
-            Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
-
-            // World space shading (perturbed) normal in intersection point.
-            Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
-
-            // World space tangent.
-            Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
-
-            const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
-
-            /*
-            // TODO: probably can be safely removed.
-            if(dot(perturbed_normal_world, original_normal_world) <= 0 // cos theta
-                || std::abs(perturbed_normal_world.x) < 1e-6
-                || std::abs(perturbed_normal_world.y) < 1e-6)
-            {
-                MicrofacetBRDFHelper<GGXMDF>::sample(
-                    sampling_context,
-                    roughness,
-                    alpha_x,
-                    alpha_y,
-                    f,
-                    local_geometry,
-                    outgoing,
-                    sample);
-                return;
-            }
-            */
-
-            // View intersecting with perturbed facet. i -> p -> t -> o
-            if (sampling_context.next2<float>() < lambda_p(perturbed_normal_world, outgoing.get_value(), original_normal_world))
-            {
-                // Sample facet with perturbed normal.
-                MicrofacetBRDFHelper<GGXMDF>::sample(
-                    sampling_context,
-                    roughness,
-                    alpha_x,
-                    alpha_y,
-                    f,
-                    local_geometry,
-                    outgoing,
-                    sample);
-
-                value *= sample.m_value.m_glossy;
-                
-                // Sampling fail?
-                if(foundation::is_zero(value))
-                {
-                    sample.m_value.m_glossy = value;
-                    return;
-                }
-
-                // Is the sampled direction shadowed?
-                if (sampling_context.next2<float>() > G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world))
-                {
-                    // Incoming reflect on tangent facet.
-                    Vector3f incoming_reflected_world = 
-                        normalize(sample.m_incoming.get_value() -2.0f * dot(sample.m_incoming.get_value(), tangent_world) * tangent_world);
-
-                    value = value 
-                        * shift_cos_in_fast(mdot(incoming_reflected_world, perturbed_normal_world), shadow_terminator_freq_mult)
-                        * G1(perturbed_normal_world, incoming_reflected_world, original_normal_world);
-                }
-            }
-            else
-            {
-               // View intersecting with tangent facet. i -> t -> p -> o
-               // TODO: check -outgoing
-                Vector3f outgoing_reflected_world = 
-                    normalize(-outgoing.get_value() + 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
-                
-                // Sample the perturbed facet.
-                MicrofacetBRDFHelper<GGXMDF>::sample(
-                    sampling_context,
-                    roughness,
-                    alpha_x,
-                    alpha_y,
-                    f,
-                    local_geometry,
-                    Dual3f(outgoing_reflected_world),
-                    sample);
-                
-                value *= sample.m_value.m_glossy;
-                // Sample fail
-                if (foundation::is_zero(value))
-                {
-                    sample.m_value.m_glossy = value;
-                    return;
-                }
-
-                value = value 
-                    * shift_cos_in_fast(mdot(sample.m_incoming.get_value(), perturbed_normal_world), shadow_terminator_freq_mult)
-                    * G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world);
-            }
-
-            if (dot(sample.m_incoming.get_value(), original_normal_world) <= 0.0f)
-            {
-                sample.m_value.m_glossy = Spectrum(0.0f);
-                return;
-            }
-
-            // Set the final value.
-            sample.m_value.m_glossy = value;
-
-            // In glosy case, pdf should be modified. 
-            float pdf = evaluate_pdf_microfacet_based_normal_mapping(
-                local_geometry,
-                outgoing.get_value(),
-                sample.m_incoming.get_value(),
-                alpha_x,
-                alpha_y);
-            
-            sample.set_to_scattering(ScatteringMode::Glossy, pdf);
-        }
-
-        static void sample_microfacet_based_normal_mapping_specular(
-            SamplingContext&                     sampling_context,
-            const FresnelConductorSchlickLazanyi f, 
-            const LocalGeometry&                 local_geometry, 
-            const foundation::Dual3f&            outgoing, 
-            BSDFSample&                          sample)
-        {
-            Spectrum value(1.0);
-
-            // Original shading normal and basis.
-            Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
-
-            // World space shading (perturbed) normal in intersection point.
-            Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
-
-            // World space tangent
-            Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
-
-            /*
-            // TODO: probably can be safely removed.
-            if(dot(perturbed_normal_world, original_normal_world) <= 0 
-                || std::abs(perturbed_normal_world.x) < 1e-6
-                || std::abs(perturbed_normal_world.y) < 1e-6)
-            {
-                SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
-                return;
-            }
-            */
-
-            // Intersecting with perturbed facet?
-            if (sampling_context.next2<float>() < lambda_p(perturbed_normal_world, outgoing.get_value(), original_normal_world))
-            {
-                // Sample facet with perturbed normal
-                SpecularBRDFHelper::sample(f, local_geometry, outgoing, sample);
-                value *= sample.m_value.m_glossy;
-                // sampling fail?
-                if(foundation::is_zero(value))
-                {
-                    sample.m_value.m_glossy = value;
-                    return;
-                }
-
-                // Is the sampled direction shadowed?
-                if (sampling_context.next2<float>() > G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world))
-                {
-                    // Reflect on tangent facet.
-                    Vector3f incoming_reflected_world = 
-                        normalize(sample.m_incoming.get_value() - 2.0f * dot(sample.m_incoming.get_value(), tangent_world) * tangent_world);
-
-                    value = value 
-                        * mdot(incoming_reflected_world, perturbed_normal_world)
-                        * G1(perturbed_normal_world, incoming_reflected_world, original_normal_world);
-                }
-            }
-            else
-            {
-                // One reflection on tangent facet.
-                Vector3f outgoing_reflected_world = 
-                    normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent_world) * tangent_world);
-                
-                // Sample the perturbed facet.
-                SpecularBRDFHelper::sample(f, local_geometry, Dual3f(outgoing_reflected_world), sample);
-                value *= sample.m_value.m_glossy;
-                // Sample fail
-                if (foundation::is_zero(value))
-                {
-                    sample.m_value.m_glossy = value;
-                    return;
-                }
-                value = value 
-                    * mdot(sample.m_incoming.get_value(), perturbed_normal_world)
-                    * G1(perturbed_normal_world, sample.m_incoming.get_value(), original_normal_world);
-            }
-            if (dot(sample.m_incoming.get_value(), original_normal_world) <= 0.0f)
-            {
-                sample.m_value.m_glossy = Spectrum(0.0f);
-                return;
-            }
-            // Set the final value.
-            sample.m_value.m_glossy = value;
-
-            // In specular case, pdf is BSDF::deltaDiract and it is not used (?)
-        }
-
-        static float evaluate_microfacet_based_normal_mapping(
-            const LocalGeometry&                 local_geometry,
-            const Vector3f&                      outgoing,
-            const Vector3f&                      incoming,
-            DirectShadingComponents&             value,
-            float                                alpha_x,
-            float                                alpha_y,
-            const FresnelConductorSchlickLazanyi f)
-        {
-            Spectrum final_value(0.0f);
-
-            // World space original shading normal.
-            Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal()); 
-
-            // World space shading (perturbed) normal in intersection point.
-            Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
-
-            // World space tangent.
-            Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
-
-            Vector3f outgoing_reflected_world = 
-                normalize(outgoing - 2.0f * dot(outgoing, tangent_world) * tangent_world);
-
-            Vector3f incoming_reflected_world =
-                normalize(incoming - 2.0f * dot(incoming, tangent_world) * tangent_world);
-
-            const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
-
-            /*
-            // TODO: probably can be safely removed
-            if(dot(perturbed_normal_world, original_normal_world) <= 0 // cos theta
-                || std::abs(perturbed_normal_world.x) < 1e-6
-                || std::abs(perturbed_normal_world.y) < 1e-6)
-            {
-                // Evaluate using world space incoming, outgoing.
-                Spectrum value_default(0.0f);
-                float pdf_default = MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                    alpha_x,
-                    alpha_y,
-                    f,
-                    local_geometry,
-                    outgoing,
-                    incoming,
-                    value_default);
-
-                value.m_glossy = value_default;
-                return pdf_default;
-            }
-            */
-
-            // i -> p -> o
-            Spectrum value_ipo(0.0f);
-            MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                alpha_x,
-                alpha_y,
-                f,
-                local_geometry,
-                outgoing,
-                incoming,
-                value_ipo);
-
-            // Apply microfacet based mapping on value.
-            final_value += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
-                        * value_ipo
-                        * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
-                        * G1(perturbed_normal_world, incoming, original_normal_world); // only wp is visible
-
-            // i -> p -> t -> o
-            if(dot(incoming, tangent_world) > 0.0f)
-            {
-                Spectrum value_ipto(0.0f);
-                MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                    alpha_x,
-                    alpha_y,
-                    f,
-                    local_geometry,
-                    outgoing,
-                    incoming_reflected_world,
-                    value_ipto);
-
-                // Apply microfacet based normal mapping on value.
-                final_value += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
-                    * value_ipto
-                    * shift_cos_in_fast(mdot(incoming_reflected_world, perturbed_normal_world), shadow_terminator_freq_mult)
-                    * (1.0f - G1(perturbed_normal_world, incoming_reflected_world, original_normal_world)) // 1-G
-                    * (G1(perturbed_normal_world, incoming, original_normal_world)); // only wt is visible (fig6)
-            }
-
-            // i -> t -> p -> o
-            if (dot(outgoing, tangent_world) > 0.0f)
-            {
-                Spectrum value_itpo(0.0f);
-                MicrofacetBRDFHelper<GGXMDF>::evaluate(
-                    alpha_x,
-                    alpha_y,
-                    f,
-                    local_geometry,
-                    outgoing_reflected_world,
-                    incoming,
-                    value_itpo);
-
-                // Apply microfacet based normal mapping on value.
-                final_value += (1.0f - lambda_p(perturbed_normal_world, outgoing, original_normal_world)) // lambda_t
-                    * value_itpo
-                    * shift_cos_in_fast(mdot(incoming, perturbed_normal_world), shadow_terminator_freq_mult)
-                    * G1(perturbed_normal_world, incoming, original_normal_world);
-                    //* (1.0f - G1(perturbed_normal_world, outgoing_reflected_world, original_normal_world)); // should be 1.0f
-            }
-
-            // Microfacet based normal mapping is applied to BRDF value.
-            value.m_glossy = final_value;
-
-            // Applye microfacet based normal mapping to pdf.
-            float pdf = evaluate_pdf_microfacet_based_normal_mapping(
-                local_geometry,
-                outgoing,
-                incoming,
-                alpha_x,
-                alpha_y);
-            
-            return pdf;
-        }
-
-        static float evaluate_pdf_microfacet_based_normal_mapping(
-            const LocalGeometry&                 local_geometry,
-            const Vector3f&                      outgoing,
-            const Vector3f&                      incoming,
-            float                                alpha_x,
-            float                                alpha_y)
-        {
-            float pdf = 0.0f;
-
-            // Original shading normal and basis.
-            Vector3f original_normal_world(local_geometry.m_shading_point->get_original_shading_normal());
-
-            // World space shading (perturbed) normal in intersection point.
-            Vector3f perturbed_normal_world(local_geometry.m_shading_point->get_shading_normal());
-
-            // World space tangent.
-            Vector3f tangent_world = normalize(Vector3f(-perturbed_normal_world.x, -perturbed_normal_world.y, 0.0f));
-
-            Vector3f outgoing_reflected_world = 
-                normalize(outgoing - 2.0f * dot(outgoing, tangent_world) * tangent_world);
-
-            Vector3f incoming_reflected_world =
-                normalize(incoming - 2.0f * dot(incoming, tangent_world) * tangent_world);
-
-            /* TODO: probably can be safely removed.
-            // Test perturbed_normal for validity.
-            if(dot(perturbed_normal_world, original_normal_world) <= 0 
-                || std::abs(perturbed_normal_world.x) < 1e-6
-                || std::abs(perturbed_normal_world.y) < 1e-6)
-            {
-                return MicrofacetBRDFHelper<GGXMDF>::pdf(
-                        alpha_x,
-                        alpha_y,
-                        local_geometry,
-                        outgoing,
-                        incoming);
-            }
-            */
-            
-            // i -> p -> o
-            if (lambda_p(perturbed_normal_world, outgoing, original_normal_world) > 0.0f)
-            {
-                const float pdf_ipo =
-                    MicrofacetBRDFHelper<GGXMDF>::pdf(
-                        alpha_x,
-                        alpha_y,
-                        local_geometry,
-                        outgoing,
-                        incoming);
-
-                // Apply microfacet based normal mapping on pdf.
-                pdf += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
-                    * pdf_ipo
-                    * G1(perturbed_normal_world, incoming, original_normal_world);
-
-                // i -> p -> t -> o
-                if(dot(incoming, tangent_world) > 1e-6)
-                {
-                    const float pdf_ipto =
-                        MicrofacetBRDFHelper<GGXMDF>::pdf(
-                            alpha_x,
-                            alpha_y,
-                            local_geometry,
-                            outgoing,
-                            incoming_reflected_world);
-
-                    // Apply microfacet based normal mapping on pdf.
-                    pdf += lambda_p(perturbed_normal_world, outgoing, original_normal_world)
-                        * pdf_ipto
-                        * (G1(perturbed_normal_world, incoming, original_normal_world))
-                        * (1.0f - G1(perturbed_normal_world, incoming_reflected_world, original_normal_world));
-                }
-            }
-
-            // i -> t -> p -> o
-            if(lambda_p(perturbed_normal_world, outgoing, original_normal_world) < 1.0f && dot(outgoing, tangent_world) > 1e-6)
-            {
-                const float pdf_itpo =
-                    MicrofacetBRDFHelper<GGXMDF>::pdf(
-                        alpha_x,
-                        alpha_y,
-                        local_geometry,
-                        outgoing_reflected_world,
-                        incoming);
-                
-                // Apply microfacet based normal mapping on pdf.
-                pdf += (1.0f - lambda_p(perturbed_normal_world, outgoing, original_normal_world)) // lambda_t
-                    * pdf_itpo;
-                    //* G1(perturbed_normal_world, incoming, original_normal_world) // should be 1.0f?
-                    //* (1.0f - G1(tangent_world, outgoing_reflected_world, original_normal_world)); // should be 1.0f
-            }
-            return pdf;
-        }
-
-        static float pdot(Vector3f a, Vector3f b) {
-	        return std::max(0.0f, dot(a, b));
-        }
-
-        static float mdot(Vector3f a, Vector3f b)
-        {
-            return std::min(std::abs(foundation::dot(a, b)), 1.0f);
-        }
-
-        static float sin_theta(float cos_theta)
-        {
-            return std::sqrt(1.0f - cos_theta * cos_theta);
-        }
-
-        static float lambda_p(Vector3f wp, Vector3f wi, Vector3f wg)
-        {
-            float i_dot_p = pdot(wp, wi);
-            Vector3f tangent = normalize(Vector3f(-wp.x, -wp.y, 0.0f));
-            float t_dot_i = pdot(tangent, wi);
-            float cos_theta_wp = pdot(wg, wp); // cos(theta)
-            float sin_theta_wp = sin_theta(cos_theta_wp);
-            float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta_wp);        
-            return lambda;
-        }
-
-        static float G1(Vector3f wp, Vector3f w, Vector3f wg)
-        {
-            float cos_theta_w = pdot(w, wg);
-            float cos_theta_wp = pdot(wp, wg);
-            float sin_theta_wp = sin_theta(cos_theta_wp);
-            float w_dot_wp = pdot(w, wp);
-            Vector3f tangent = normalize(Vector3f(-wp.x, -wp.y, 0.0f));
-            float w_dot_wt = pdot(w, tangent);
-            float G = std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta_wp));
-            return G;
         }
     };
 
