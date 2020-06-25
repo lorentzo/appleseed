@@ -35,6 +35,7 @@
 #include "renderer/kernel/shading/shadingpoint.h"
 #include "renderer/modeling/bsdf/bsdfsample.h"
 #include "renderer/modeling/scene/objectinstance.h"
+#include "renderer/modeling/bsdf/microfacetnormalmappinghelper.h"
 #include "renderer/utility/shadowterminator.h"
 
 // appleseed.foundation headers.
@@ -103,6 +104,8 @@ class BSDFWrapper
         const foundation::Basis3f&      shading_basis,
         const foundation::Vector3f&     outgoing,
         const foundation::Vector3f&     incoming) const;
+    
+    MicrofacetNormalMappingHelper<BSDFImpl> microfacet_normal_mapping;
 };
 
 
@@ -115,6 +118,7 @@ BSDFWrapper<BSDFImpl, Cull>::BSDFWrapper(
     const char*                         name,
     const ParamArray&                   params)
   : BSDFImpl(name, params)
+  , microfacet_normal_mapping(name, params)
 {
 }
 
@@ -139,16 +143,29 @@ void BSDFWrapper<BSDFImpl, Cull>::sample(
     // Resume execution here to reliably reproduce problems downstream.
     sampling_context = backup_sampling_context;
 #endif
-
-    BSDFImpl::sample(
-        sampling_context,
-        data,
-        adjoint,
-        false,
-        local_geometry,
-        outgoing,
-        modes,
-        sample);
+    
+    bool use_microfacet_normal_mapping = true; // TODO: obtain this flag from data
+    
+    if (use_microfacet_normal_mapping)
+        microfacet_normal_mapping.sample(
+            sampling_context,
+            data,
+            adjoint,
+            false,
+            local_geometry,
+            outgoing,
+            modes,
+            sample);
+    else
+        BSDFImpl::sample(
+            sampling_context,
+            data,
+            adjoint,
+            false,
+            local_geometry,
+            outgoing,
+            modes,
+            sample);
 
     if (sample.get_mode() != ScatteringMode::None)
     {
@@ -176,7 +193,7 @@ void BSDFWrapper<BSDFImpl, Cull>::sample(
         //             (sample.m_probability > 0.0f && ref_probability == 0.0f));  // todo: this case is worrisome!
         // #endif
 
-        if (false)
+        if (!use_microfacet_normal_mapping && cosine_mult)
         {
             if (adjoint)
             {
@@ -210,26 +227,41 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
     assert(foundation::is_normalized(outgoing));
     assert(foundation::is_normalized(incoming));
 
-    if (false && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    bool use_microfacet_normal_mapping = true;
+    float probability = 0.0f;
+
+    if (!use_microfacet_normal_mapping && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
-    const float probability =
-        BSDFImpl::evaluate(
-            data,
-            adjoint,
-            false,
-            local_geometry,
-            outgoing,
-            incoming,
-            modes,
-            value);
+    if (use_microfacet_normal_mapping)
+        probability = 
+            microfacet_normal_mapping.evaluate(
+                data,
+                adjoint,
+                false,
+                local_geometry,
+                outgoing,
+                incoming,
+                modes,
+                value);
+    else
+        probability=
+            BSDFImpl::evaluate(
+                data,
+                adjoint,
+                false,
+                local_geometry,
+                outgoing,
+                incoming,
+                modes,
+                value);
     assert(probability >= 0.0f);
 
     if (probability > 0.0f)
     {
         assert(value.is_valid());
 
-        if (false)
+        if (!use_microfacet_normal_mapping && cosine_mult)
         {
             if (adjoint)
             {
@@ -263,17 +295,30 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate_pdf(
     assert(foundation::is_normalized(outgoing));
     assert(foundation::is_normalized(incoming));
 
-    if (false && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    bool use_microfacet_normal_mapping = true;
+    float probability = 0.0f;
+
+    if (!use_microfacet_normal_mapping && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
-    const float probability =
-        BSDFImpl::evaluate_pdf(
-            data,
-            adjoint,
-            local_geometry,
-            outgoing,
-            incoming,
-            modes);
+    if (use_microfacet_normal_mapping)
+        probability = 
+            microfacet_normal_mapping.evaluate_pdf(
+                data,
+                adjoint,
+                local_geometry,
+                outgoing,
+                incoming,
+                modes);
+    else
+        probability =
+            BSDFImpl::evaluate_pdf(
+                data,
+                adjoint,
+                local_geometry,
+                outgoing,
+                incoming,
+                modes);
     assert(probability >= 0.0f);
 
     return probability;
