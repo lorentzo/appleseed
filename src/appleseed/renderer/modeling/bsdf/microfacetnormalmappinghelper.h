@@ -110,7 +110,7 @@ static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vec
 	float w_dot_wp = cdot(w, wp);
 	float w_dot_wt = cdot(w, tangent);
 
-	float G = std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta_wp));
+	float G = H * std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta_wp));
 	return G;
 }
 
@@ -248,8 +248,8 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		final_sample_value = sample.m_value; // TODO: if sample_value == 0?
 
 		// Masking of the perturbed facet.
-		final_sample_value *= shift_cos_in_fast(mdot(sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult);
-			//* G1(perturbed_shading_normal, sample.m_incoming.get_value(), original_shading_normal, true); // TODO G1(wo, wp) vs G1(wo, wt)
+		final_sample_value *= shift_cos_in_fast(mdot(sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult)
+			* G1(perturbed_shading_normal, sample.m_incoming.get_value(), original_shading_normal, true); // TODO G1(wo, wp) vs G1(wo, wt)
 	}
 
 	// Check the sampled incoming.
