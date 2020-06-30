@@ -92,6 +92,9 @@ static float lambda_p(foundation::Vector3f wp, foundation::Vector3f wi, foundati
 
 static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vector3f wg, bool w_wp)
 {
+	if (dot(w, wg) <= 0.0f)
+		return 0.0f;
+
 	foundation::Vector3f tangent = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
 	float H = 0.0f;
 
@@ -193,7 +196,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 
 	const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
-	// check outgoing for validity.
+	// check outgoing for validity. Intersection probability check.
 	if (dot(outgoing.get_value(), original_shading_normal) <= 0.0f)
 		return;
 
@@ -319,7 +322,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 
 	const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
-	// Check incoming and outgoing for validity.
+	// Check incoming and outgoing for validity. Masking and intersection probability check.
 	if (dot(incoming, original_shading_normal) <= 0.0f || dot(outgoing, original_shading_normal) <= 0.0f)
 	{
 		return 0.0f;
@@ -432,7 +435,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 	foundation::Vector3f incoming_reflected =
 		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
 
-	// Check incoming and outgoing for validity.
+	// Check incoming and outgoing for validity. Masking and intersection probability check.
 	if (dot(incoming, original_shading_normal) <= 0.0f || dot(outgoing, original_shading_normal) <= 0.0f)
 	{
 		return 0.0f;
