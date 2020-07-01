@@ -65,29 +65,35 @@ static float heaviside(float a)
 	}
 }
 
-static float cdot(foundation::Vector3f a, foundation::Vector3f b) {
-	return std::max(0.0f, dot(a, b));
-}
-
 static float mdot(foundation::Vector3f a, foundation::Vector3f b)
 {
 	return std::min(std::abs(foundation::dot(a, b)), 1.0f);
 }
 
-static float sin_theta(float cos_theta)
-{
-	return std::sqrt(1.0f - cos_theta * cos_theta);
-}
-
 static float lambda_p(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
 {
-	float i_dot_p = cdot(wp, wi);
-	foundation::Vector3f tangent = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
-	float t_dot_i = cdot(tangent, wi);
-	float cos_theta_wp = cdot(wg, wp); // cos(theta)
-	float sin_theta_wp = sin_theta(cos_theta_wp);
-	float lambda = i_dot_p / (i_dot_p + t_dot_i * sin_theta_wp);        
-	return lambda;
+	if(dot(wi, wg) <= 0.0f)
+		return 0.0f;
+
+	float wi_dot_wp = dot(wi, wp);
+	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
+	float wi_dot_wt = dot(wi, wt);
+	float wp_dot_wg = dot(wp, wg);
+
+	return wi_dot_wp / (wi_dot_wp + wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f)));
+}
+
+static float lambda_t(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
+{
+	if(dot(wi, wg) <= 0.0f)
+		return 0.0f;
+	
+	float wi_dot_wp = dot(wi, wp);
+	float wp_dot_wg = dot(wp, wg);
+	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
+	float wi_dot_wt = dot(wi, wt);
+
+	return (wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / (wi_dot_wp + wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f)));
 }
 
 static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vector3f wg, bool w_wp)
@@ -95,26 +101,24 @@ static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vec
 	if (dot(w, wg) <= 0.0f)
 		return 0.0f;
 
-	foundation::Vector3f tangent = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
 	float H = 0.0f;
+	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
 
 	if(w_wp)
 	{
-		H = heaviside(dot(w,wp));
+		H = heaviside(dot(w, wp));
 	}
 	else
 	{
-		H = heaviside(dot(w,tangent));
+		H = heaviside(dot(w, wt));
 	}
-	
-	float cos_theta_w = cdot(w, wg);
-	float cos_theta_wp = cdot(wp, wg);
-	float sin_theta_wp = sin_theta(cos_theta_wp);
-	float w_dot_wp = cdot(w, wp);
-	float w_dot_wt = cdot(w, tangent);
 
-	float G = H * std::min(1.0f, cos_theta_w * cos_theta_wp / (w_dot_wp + w_dot_wt * sin_theta_wp));
-	return G;
+	float w_dot_wg = dot(w, wg);
+	float wp_dot_wg = dot(wp, wg);
+	float w_dot_wp = dot(w, wp);
+	float w_dot_wt = dot(w, wt);
+
+	return H * std::min(1.0f, (w_dot_wg * wp_dot_wg) / (w_dot_wp + w_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))));
 }
 
 template <typename BSDFImpl>
@@ -386,10 +390,10 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
             value_itpo); // fp(w'i, wo, wp)
 
 		// Apply microfacet based normal mapping on value.
-		value_itpo *= (1.0f - lambda_p(perturbed_shading_normal, outgoing, original_shading_normal)) // lambda_t(wi)
+		value_itpo *= lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_t(wi)
 			* shift_cos_in_fast(mdot(incoming, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
 			* G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-			// * (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false); // 1-G1(w'i, wt) * H(dot(w'i, wt))
+		    //* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt))
 
 		final_value += value_itpo;
 	}
@@ -492,7 +496,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 					modes); // fp(w'i, wo, wp)
 		
 		// Apply microfacet based normal mapping on pdf.
-		final_pdf += (1.0f - lambda_p(perturbed_shading_normal, outgoing, original_shading_normal)) // lambda_t(wi)
+		final_pdf += lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_t(wi)
 			* pdf_itpo; // fp(w'i, wo, wp)
 			// * G1(perturbed_shading_normal, incoming, original_shading_normal, true) // G1(wo, wp) * H(dot(wo, wp))
 			// * (1.0f - G1(tangent, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt))
