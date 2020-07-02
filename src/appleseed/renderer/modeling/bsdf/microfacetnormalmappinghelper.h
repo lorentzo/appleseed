@@ -53,6 +53,8 @@ namespace renderer
 // Paper/Mitsuba wo -> incoming Appleseed.
 //
 
+// TODO: use foundation/math/fastmath.h
+
 static float heaviside(float a)
 {
 	if(a < 0.0f)
@@ -70,30 +72,46 @@ static float mdot(foundation::Vector3f a, foundation::Vector3f b)
 	return std::min(std::abs(foundation::dot(a, b)), 1.0f);
 }
 
+static float cdot(foundation::Vector3f a, foundation::Vector3f b)
+{
+	return std::max(foundation::dot(a, b), 0.0f);
+}
+
+// TODO: use only one lambda function with flag for wp or wt.
+// Note: cdot(a,b) is used because it "checks" if vectors are dot(a,b)<0
 static float lambda_p(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
 {
-	if(dot(wi, wg) <= 0.0f)
+	//if(dot(wp, wg) <= 0.0f) // covered with cdot
+	//	return 0.0f;
+	
+	if(dot(wi,wp)<=0.0f)
 		return 0.0f;
-
-	float wi_dot_wp = dot(wi, wp);
+	
+	float wi_dot_wp = cdot(wi, wp);
 	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
-	float wi_dot_wt = dot(wi, wt);
-	float wp_dot_wg = dot(wp, wg);
+	float wi_dot_wt = cdot(wi, wt);
+	float wp_dot_wg = cdot(wp, wg);
 
-	return wi_dot_wp / (wi_dot_wp + wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f)));
+	float a_p_wi = wi_dot_wp / wp_dot_wg;
+	float a_t_wi = (wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / wp_dot_wg;
+
+	return a_p_wi / (a_p_wi + a_t_wi);
 }
 
 static float lambda_t(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
 {
-	if(dot(wi, wg) <= 0.0f)
-		return 0.0f;
-	
-	float wi_dot_wp = dot(wi, wp);
-	float wp_dot_wg = dot(wp, wg);
 	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
-	float wi_dot_wt = dot(wi, wt);
+	//if(dot(wi,wt)<=0.0f) // covered with cdot
+	//	return 0.0f;
+	
+	float wi_dot_wp = cdot(wi, wp);
+	float wi_dot_wt = cdot(wi, wt);
+	float wp_dot_wg = cdot(wp, wg);
 
-	return (wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / (wi_dot_wp + wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f)));
+	float a_p_wi = wi_dot_wp / wp_dot_wg;
+	float a_t_wi = (wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / wp_dot_wg;
+
+	return a_t_wi / (a_p_wi + a_t_wi);
 }
 
 static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vector3f wg, bool w_wp)
@@ -239,7 +257,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		// View direction is intersecting tangent facet, reflect. i -> t -> p -> o.
 		// TODO: check outgoing vector orientation.
 		foundation::Vector3f outgoing_reflected = 
-            normalize(-outgoing.get_value() + 2.0f * dot(outgoing.get_value(), tangent) * tangent);
+            normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent);
 
 		// Sample perturbed facet BRDF.
 		BSDFImpl::sample(
