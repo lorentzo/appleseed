@@ -241,7 +241,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		{
 			// World space incoming direction reflected on tangent facet.
 			foundation::Vector3f incoming_reflected = 
-                normalize(sample.m_incoming.get_value() -2.0f * dot(sample.m_incoming.get_value(), tangent) * tangent);
+                -normalize(sample.m_incoming.get_value() -2.0f * dot(sample.m_incoming.get_value(), tangent) * tangent);
 
 			final_sample_value *= G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true) // TODO G1(w'o, wp) vs G1(w'o, wt)
 				* shift_cos_in_fast(mdot(incoming_reflected, perturbed_shading_normal), shadow_terminator_freq_mult);
@@ -252,7 +252,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		// View direction is intersecting tangent facet, reflect. i -> t -> p -> o.
 		// TODO: check outgoing vector orientation.
 		foundation::Vector3f outgoing_reflected = 
-            normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent);
+            -normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent);
 
 		// Sample perturbed facet BRDF.
 		BSDFImpl::sample(
@@ -264,12 +264,12 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
             foundation::Dual3f(outgoing_reflected),
             modes,
             sample);
-		
+
 		final_sample_value = sample.m_value; // TODO: if sample_value == 0?
 
 		// Masking of the perturbed facet.
 		final_sample_value *= shift_cos_in_fast(mdot(sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult)
-			* G1(perturbed_shading_normal, sample.m_incoming.get_value(), original_shading_normal, true); // TODO G1(wo, wp) vs G1(wo, wt)
+			* G1(perturbed_shading_normal, sample.m_incoming.get_value(), original_shading_normal, false); // TODO G1(wo, wp) vs G1(wo, wt)
 	}
 
 	// Check the sampled incoming.
@@ -329,14 +329,6 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 	// World space tangent.
 	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
 
-	// World space outgoing direction reflected at tangent facet.
-	foundation::Vector3f outgoing_reflected = 
-		normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
-
-	// World space incoming direction reflected at tangent facet.	
-	foundation::Vector3f incoming_reflected =
-		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
-
 	const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
 	// Check incoming and outgoing for validity. Masking and intersection probability check.
@@ -369,6 +361,10 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 	// Case: i -> p -> t -> o
 	if(dot(incoming, tangent) > 0.0f)
 	{
+		// World space incoming direction reflected at tangent facet.	
+		foundation::Vector3f incoming_reflected =
+			-normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
+
 		DirectShadingComponents value_ipto;
 		BSDFImpl::evaluate(
             data,
@@ -391,6 +387,10 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 	// Case: i -> t -> p -> o
 	if (dot(outgoing, tangent) > 0.0f)
 	{
+		// World space outgoing direction reflected at tangent facet.
+		foundation::Vector3f outgoing_reflected = 
+			-normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
+
 		DirectShadingComponents value_itpo;
 		BSDFImpl::evaluate(
             data,
@@ -444,14 +444,6 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 	// World space tangent.
 	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
 
-	// World space outgoing direction reflected at tangent facet.
-	foundation::Vector3f outgoing_reflected = 
-		normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
-
-	// World space incoming direction reflected at tangent facet.
-	foundation::Vector3f incoming_reflected =
-		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
-
 	// Check incoming and outgoing for validity. Masking and intersection probability check.
 	if (dot(incoming, original_shading_normal) <= 0.0f || dot(outgoing, original_shading_normal) <= 0.0f)
 	{
@@ -480,6 +472,10 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 		// Case: i -> p -> t -> o
 		if(dot(incoming, tangent) > 1e-6)
 		{
+			// World space incoming direction reflected at tangent facet.
+			foundation::Vector3f incoming_reflected =
+				-normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
+
 			float pdf_ipto =
 				BSDFImpl::evaluate_pdf(
 					data,
@@ -499,6 +495,10 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 	// Case: i -> t -> p -> o
 	if(lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) < 1.0f && dot(outgoing, tangent) > 1e-6)
 	{
+		// World space outgoing direction reflected at tangent facet.
+		foundation::Vector3f outgoing_reflected = 
+			-normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
+
 		const float pdf_itpo =
 			BSDFImpl::evaluate_pdf(
 					data,
