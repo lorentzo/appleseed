@@ -78,15 +78,9 @@ static float cdot(foundation::Vector3f a, foundation::Vector3f b)
 }
 
 // TODO: use only one lambda function with flag for wp or wt.
-// Note: cdot(a,b) is used because it "checks" if vectors are dot(a,b)<0
+// Note: cdot(a,b) is used for safe calculation because it "checks" if vectors are dot(a,b)<0.
 static float lambda_p(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
-{
-	//if(dot(wp, wg) <= 0.0f) // covered with cdot
-	//	return 0.0f;
-	
-	if(dot(wi,wp)<=0.0f)
-		return 0.0f;
-	
+{	
 	float wi_dot_wp = cdot(wi, wp);
 	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
 	float wi_dot_wt = cdot(wi, wt);
@@ -101,8 +95,6 @@ static float lambda_p(foundation::Vector3f wp, foundation::Vector3f wi, foundati
 static float lambda_t(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
 {
 	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
-	//if(dot(wi,wt)<=0.0f) // covered with cdot
-	//	return 0.0f;
 	
 	float wi_dot_wp = cdot(wi, wp);
 	float wi_dot_wt = cdot(wi, wt);
@@ -136,7 +128,10 @@ static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vec
 	float w_dot_wp = dot(w, wp);
 	float w_dot_wt = dot(w, wt);
 
-	return H * std::min(1.0f, (w_dot_wg * wp_dot_wg) / (w_dot_wp + w_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))));
+	float ap_w = w_dot_wp / wp_dot_wg;
+	float at_w = (w_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / wp_dot_wg;
+
+	return H * std::min(1.0f, w_dot_wg / (ap_w + at_w));
 }
 
 template <typename BSDFImpl>
@@ -223,7 +218,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		return;
 
 	// TODO: check perturbed shading normal.
-	// ...
+	// ... done in lambda using clamped dot
 
 	// View direction is intersecting perturbed facet, sample its BRDF.
 	if(sampling_context.next2<float>() < lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal))
@@ -248,7 +243,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 			foundation::Vector3f incoming_reflected = 
                 normalize(sample.m_incoming.get_value() -2.0f * dot(sample.m_incoming.get_value(), tangent) * tangent);
 
-			final_sample_value *= G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false) // TODO G1(w'o, wp) vs G1(w'o, wt)
+			final_sample_value *= G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true) // TODO G1(w'o, wp) vs G1(w'o, wt)
 				* shift_cos_in_fast(mdot(incoming_reflected, perturbed_shading_normal), shadow_terminator_freq_mult);
 		}
 	}
@@ -512,7 +507,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 					outgoing_reflected,
 					incoming,
 					modes); // fp(w'i, wo, wp)
-		
+
 		// Apply microfacet based normal mapping on pdf.
 		final_pdf += lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_t(wi)
 			* pdf_itpo; // fp(w'i, wo, wp)
