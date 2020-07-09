@@ -82,10 +82,10 @@ static float lambda_p(foundation::Vector3f wp, foundation::Vector3f wi, foundati
 	float wi_dot_wt = cdot(wi, wt);
 	float wp_dot_wg = cdot(wp, wg);
 
-	float a_p_wi = wi_dot_wp / wp_dot_wg;
-	float a_t_wi = (wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / wp_dot_wg;
+	float ap_wi = wi_dot_wp / wp_dot_wg;
+	float at_wi = (wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / wp_dot_wg;
 
-	return a_p_wi / (a_p_wi + a_t_wi);
+	return ap_wi / (ap_wi + at_wi);
 }
 
 static float lambda_t(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
@@ -96,10 +96,10 @@ static float lambda_t(foundation::Vector3f wp, foundation::Vector3f wi, foundati
 	float wi_dot_wt = cdot(wi, wt);
 	float wp_dot_wg = cdot(wp, wg);
 
-	float a_p_wi = wi_dot_wp / wp_dot_wg;
-	float a_t_wi = (wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / wp_dot_wg;
+	float ap_wi = wi_dot_wp / wp_dot_wg;
+	float at_wi = (wi_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / wp_dot_wg;
 
-	return a_t_wi / (a_p_wi + a_t_wi);
+	return at_wi / (ap_wi + at_wi);
 }
 
 static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vector3f wg, bool w_wp)
@@ -207,9 +207,9 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 	// World space perturbed shading normal.
 	foundation::Vector3f perturbed_shading_normal(local_geometry.m_shading_point->get_shading_normal());
 
-	// TODO: dot(original_shading_normal, perturbed_shading_normal) <= 0?
+	// TODO: dot(original_shading_normal, perturbed_shading_normal) <= 0.0f?
 	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed)
-	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 6)
+	if((dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6))
 	{
 		BSDFImpl::sample(
 			sampling_context,
