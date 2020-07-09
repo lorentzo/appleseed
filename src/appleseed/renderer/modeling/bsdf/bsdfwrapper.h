@@ -255,6 +255,7 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
                 incoming,
                 modes,
                 value);
+
     assert(probability >= 0.0f);
 
     if (probability > 0.0f)
@@ -278,7 +279,6 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
             }
         }
     }
-
     return probability;
 }
 
@@ -298,7 +298,7 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate_pdf(
     bool use_microfacet_normal_mapping = true;
     float probability = 0.0f;
 
-    if (!use_microfacet_normal_mapping && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    if (!use_microfacet_normal_mapping && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
     if (use_microfacet_normal_mapping)
