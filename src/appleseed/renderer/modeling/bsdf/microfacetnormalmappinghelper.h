@@ -49,11 +49,7 @@ namespace renderer
 // MicrofacetNormalMappingHelper class corrects the usage of normal maps for Monte Carlo Path Tracing.
 // Based on Microfacet based normal mapping (Heitz et al.).
 // https://blogs.unity3d.com/2017/10/02/microfacet-based-normal-mapping-for-robust-monte-carlo-path-tracing/
-// Paper/Mitsuba wi -> outgoing Appleseed.
-// Paper/Mitsuba wo -> incoming Appleseed.
 //
-
-// TODO: use foundation/math/fastmath.h
 
 static float heaviside(float a)
 {
@@ -111,9 +107,9 @@ static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vec
 	if (dot(w, wg) <= 0.0f)
 		return 0.0f;
 
-	float H = 0.0f;
+	float H = 1.0f;
 	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
-
+	
 	if(w_wp)
 	{
 		H = heaviside(dot(w, wp));
@@ -122,11 +118,11 @@ static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vec
 	{
 		H = heaviside(dot(w, wt));
 	}
-
-	float w_dot_wg = dot(w, wg);
-	float wp_dot_wg = dot(wp, wg);
-	float w_dot_wp = dot(w, wp);
-	float w_dot_wt = dot(w, wt);
+	
+	float w_dot_wg = cdot(w, wg);
+	float wp_dot_wg = cdot(wp, wg);
+	float w_dot_wp = cdot(w, wp);
+	float w_dot_wt = cdot(w, wt);
 
 	float ap_w = w_dot_wp / wp_dot_wg;
 	float at_w = (w_dot_wt * std::sqrt(1.0f - std::pow(wp_dot_wg, 2.0f))) / wp_dot_wg;
@@ -199,110 +195,150 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 	const int                           modes,
 	BSDFSample&                         sample) const
 {
-	// BSDF value.
-	DirectShadingComponents final_sample_value;
-
 	// World space original shading normal.
-	foundation::Vector3f original_shading_normal(local_geometry.m_shading_point->get_original_shading_normal());
+	foundation::Vector3f original_shading_normal(local_geometry.m_shading_point->get_original_shading_normal()); 
+
+	// Check outgoing for validity. Check required for masking and intersection probability.
+	if (dot(outgoing.get_value(), original_shading_normal) <= 0.0f)
+	{
+		return;
+	}
 
 	// World space perturbed shading normal.
 	foundation::Vector3f perturbed_shading_normal(local_geometry.m_shading_point->get_shading_normal());
+
+	// TODO: dot(original_shading_normal, perturbed_shading_normal) <= 0?
+	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed)
+	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 6)
+	{
+		BSDFImpl::sample(
+			sampling_context,
+			data,
+			adjoint,
+			false,
+			local_geometry,
+			outgoing,
+			modes,
+			sample);
+		return;
+	}
 
 	// World space tangent.
 	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
 
 	const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
-	// check outgoing for validity. Intersection probability check.
-	if (dot(outgoing.get_value(), original_shading_normal) <= 0.0f)
-		return;
-
-	// TODO: check perturbed shading normal.
-	// ... done in lambda using clamped dot
-
-	// View direction is intersecting perturbed facet, sample its BRDF.
-	if(sampling_context.next2<float>() < lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal))
-	{
-		// i -> p -> o
-		BSDFImpl::sample(
-            sampling_context,
-            data,
-            adjoint,
-            false,
-            local_geometry,
-            outgoing,
-            modes,
-            sample);
-
-		final_sample_value = sample.m_value; // TODO: if sample_value == 0?
-
-		// Sampled light direction is masked by tangent facet: i -> p -> t -> o.
-		if(sampling_context.next2<float>() > G1(perturbed_shading_normal, sample.m_incoming.get_value(), original_shading_normal, true)) // TODO: G1(wo, wt) vs G1(wo, wp)
-		{
-			// World space incoming direction reflected on tangent facet.
-			foundation::Vector3f incoming_reflected = 
-                -normalize(sample.m_incoming.get_value() -2.0f * dot(sample.m_incoming.get_value(), tangent) * tangent);
-
-			final_sample_value *= G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true) // TODO G1(w'o, wp) vs G1(w'o, wt)
-				* shift_cos_in_fast(mdot(incoming_reflected, perturbed_shading_normal), shadow_terminator_freq_mult);
-		}
-	}
-	else
-	{
-		// View direction is intersecting tangent facet, reflect. i -> t -> p -> o.
-		// TODO: check outgoing vector orientation.
-		foundation::Vector3f outgoing_reflected = 
-            -normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent);
-
-		// Sample perturbed facet BRDF.
-		BSDFImpl::sample(
-            sampling_context,
-            data,
-            adjoint,
-            false,
-            local_geometry,
-            foundation::Dual3f(outgoing_reflected),
-            modes,
-            sample);
-
-		final_sample_value = sample.m_value; // TODO: if sample_value == 0?
-
-		// Masking of the perturbed facet.
-		final_sample_value *= shift_cos_in_fast(mdot(sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult)
-			* G1(perturbed_shading_normal, sample.m_incoming.get_value(), original_shading_normal, false); // TODO G1(wo, wp) vs G1(wo, wt)
-	}
-
-	// Check the sampled incoming.
-	if(dot(sample.m_incoming.get_value(), original_shading_normal) <= 0.0f)
-	{
-		return;
-	}
-
-	sample.m_value = final_sample_value;
-
-	float pdf = evaluate_pdf(
+	// Case: i -> p -> o.
+	BSDFSample ipo_sample;
+	float ipo_pdf = 0.0f;
+	BSDFImpl::sample(
+		sampling_context,
 		data,
-        adjoint,
-        local_geometry,
-        outgoing.get_value(),
-        sample.m_incoming.get_value(),
-        modes);
+		adjoint,
+		false,
+		local_geometry,
+		outgoing,
+		modes,
+		ipo_sample); // fp(wi, wp)
+	
+	ipo_sample.m_value *= lambda_p(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
+		* shift_cos_in_fast(mdot(outgoing.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
+		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
+	
+	ipo_pdf = ipo_sample.get_probability() // fp(wi, wp)
+	    * lambda_p(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
+		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
 
+	// Case: i -> p -> t -> o.
+
+	// World space outgoing reflected.
+	foundation::Vector3f outgoing_reflected = 
+        normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent);
+
+	BSDFSample ipto_sample;
+	float ipto_pdf = 0.0f;
+	BSDFImpl::sample(
+		sampling_context,
+		data,
+		adjoint,
+		false,
+		local_geometry,
+		foundation::Dual3f(outgoing_reflected),
+		modes,
+		ipto_sample); // fp(w'o, wp). Note: incoming can not be reflected here because it is caclulated in BRDF.
+	
+	ipto_sample.m_value *= lambda_p(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
+		* shift_cos_in_fast(mdot(outgoing_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // <w'o, wp>
+		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
+		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
+
+	ipto_pdf = ipto_sample.get_probability() // fp(wi, wp)
+		* lambda_p(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
+		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)) // 1-G1(w'o, wp) * H(dot(w'o, wp))
+		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, false); // G1(wo, wt) * H(dot(wo, wt))
+	
+	// Case: i -> t -> p -> o
+	BSDFSample itpo_sample;
+	float itpo_pdf = 0.0f;
+	BSDFImpl::sample(
+		sampling_context,
+		data,
+		adjoint,
+		false,
+		local_geometry,
+		outgoing,
+		modes,
+		itpo_sample); // fp(wo, wp)
+
+	// World space incoming direction reflected on tangent facet.
+	//foundation::Vector3f incoming_reflected = 
+	//	normalize(itpo_sample.m_incoming.get_value() - 2.0f * dot(itpo_sample.m_incoming.get_value(), tangent) * tangent);
+	
+	itpo_sample.m_value *= lambda_t(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal) // lambda_t(wi)
+		* shift_cos_in_fast(mdot(outgoing.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
+		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		//* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+
+	itpo_pdf = itpo_sample.get_probability() // fp(w'i, wp)
+		* lambda_t(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal) // lambda_t(wi)
+	    * G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		// * (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+
+	// Final incoming direction.
+	if(lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.5f)
+		sample.m_incoming = ipo_sample.m_incoming;
+	else
+		sample.m_incoming = itpo_sample.m_incoming;
+
+	// Check incoming for validity. If not valid return empty sample.
+	// TODO: set sample.m_incoming to Vector3f(0.0f, 0.0f, 0.0f)?
+	if (dot(sample.m_incoming.get_value(), original_shading_normal) <= 0.0f)
+	{
+		return;
+	}
+
+	// Final sample value.
+	sample.m_value += ipo_sample.m_value;
+	sample.m_value += ipto_sample.m_value;
+	sample.m_value += itpo_sample.m_value;
+
+	// Final pdf.
+	float final_pdf = ipo_pdf + ipto_pdf + itpo_pdf;
 	if(ScatteringMode::has_diffuse(modes))
 	{
-		sample.set_to_scattering(ScatteringMode::Diffuse, pdf);
+		sample.set_to_scattering(ScatteringMode::Diffuse, final_pdf);
 	}
 	if(ScatteringMode::has_glossy(modes))
 	{
-		sample.set_to_scattering(ScatteringMode::Glossy, pdf);
+		sample.set_to_scattering(ScatteringMode::Glossy, final_pdf);
 	}
 	if(ScatteringMode::has_specular(modes))
 	{
-		sample.set_to_scattering(ScatteringMode::Specular, pdf);
+		sample.set_to_scattering(ScatteringMode::Specular, final_pdf);
 	}
 	if(ScatteringMode::has_volume(modes))
 	{
-		sample.set_to_scattering(ScatteringMode::Volume, pdf);
+		sample.set_to_scattering(ScatteringMode::Volume, final_pdf);
 	}
 }
 
@@ -317,32 +353,45 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 	const int                   modes,
 	DirectShadingComponents&    value) const
 {
-	// BSDF value.
+	// BSDF value and pdf.
 	DirectShadingComponents final_value;
+	float final_pdf = 0.0f;
 
 	// World space original shading normal.
 	foundation::Vector3f original_shading_normal(local_geometry.m_shading_point->get_original_shading_normal()); 
 
+	// Check incoming and outgoing for validity. Check required for masking and intersection probability.
+	if (dot(incoming, original_shading_normal) <= 0.0f || dot(outgoing, original_shading_normal) <= 0.0f)
+	{
+		return 0.0f;
+	}
+
 	// World space perturbed shading normal.
 	foundation::Vector3f perturbed_shading_normal(local_geometry.m_shading_point->get_shading_normal());
+
+	// TODO dot(original_shading_normal, perturbed_shading_normal) <= 0?
+	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed).
+	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6)
+	{
+		return BSDFImpl::evaluate(
+            data,
+            adjoint,
+            false,
+            local_geometry,
+            outgoing,
+            incoming,
+            modes,
+            value);
+	}
 
 	// World space tangent.
 	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
 
 	const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
-	// Check incoming and outgoing for validity. Masking and intersection probability check.
-	if (dot(incoming, original_shading_normal) <= 0.0f || dot(outgoing, original_shading_normal) <= 0.0f)
-	{
-		return 0.0f;
-	}
-
-	// TODO: Check perturbed shading normal.
-	// ...
-
-	// Case: i -> p -> o 
-	DirectShadingComponents ipo_value;
-	BSDFImpl::evaluate(
+	// Case: i -> p -> o .
+	DirectShadingComponents value_ipo;
+	float pdf_ipo = BSDFImpl::evaluate(
             data,
             adjoint,
             false,
@@ -350,77 +399,77 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
             outgoing,
             incoming,
             modes,
-            ipo_value); // fp(wi, wo, wp)
-
-	ipo_value *= lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
-    	* shift_cos_in_fast(mdot(incoming, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
-        * G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
+            value_ipo); // fp(wi, wo, wp)
 	
-	final_value += ipo_value;
+	value_ipo *= lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
+    	* shift_cos_in_fast(mdot(outgoing, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
+        * G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
+	
+	pdf_ipo *= lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
+		* G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
 
-	// Case: i -> p -> t -> o
-	if(dot(incoming, tangent) > 0.0f)
-	{
-		// World space incoming direction reflected at tangent facet.	
-		foundation::Vector3f incoming_reflected =
-			-normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
+	final_value += value_ipo;
+	final_pdf += pdf_ipo;
 
-		DirectShadingComponents value_ipto;
-		BSDFImpl::evaluate(
-            data,
-            adjoint,
-            false,
-            local_geometry,
-            outgoing,
-            incoming_reflected,
-            modes,
-            value_ipto); // fp(wi, w'o, wp)
+	// Case: i -> p -> t -> o.
 
-		value_ipto *= lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
-			* shift_cos_in_fast(mdot(incoming_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // <w'o, wp>
-			* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
-			* G1(perturbed_shading_normal, incoming, original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
+	// World space outgoing direction reflected at tangent facet.
+	foundation::Vector3f outgoing_reflected = 
+		normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
 
-		final_value += value_ipto;
-	}
-
-	// Case: i -> t -> p -> o
-	if (dot(outgoing, tangent) > 0.0f)
-	{
-		// World space outgoing direction reflected at tangent facet.
-		foundation::Vector3f outgoing_reflected = 
-			-normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
-
-		DirectShadingComponents value_itpo;
-		BSDFImpl::evaluate(
-            data,
-            adjoint,
-            false,
-            local_geometry,
-            outgoing_reflected,
-            incoming,
-            modes,
-            value_itpo); // fp(w'i, wo, wp)
-
-		// Apply microfacet based normal mapping on value.
-		value_itpo *= lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_t(wi)
-			* shift_cos_in_fast(mdot(incoming, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
-			* G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-		    //* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt))
-
-		final_value += value_itpo;
-	}
-	value = final_value;
-
-	float pdf = evaluate_pdf(
+	DirectShadingComponents value_ipto;
+	float pdf_ipto = BSDFImpl::evaluate(
 		data,
-        adjoint,
-        local_geometry,
-        outgoing,
-        incoming,
-        modes);
+		adjoint,
+		false,
+		local_geometry,
+		outgoing_reflected,
+		incoming,
+		modes,
+		value_ipto); // fp(wi, w'o, wp)
 
-	return pdf;
+	value_ipto *= lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
+		* shift_cos_in_fast(mdot(outgoing_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // <w'o, wp>
+		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
+		* G1(perturbed_shading_normal, outgoing, original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
+
+	pdf_ipto *= lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
+		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
+		* G1(perturbed_shading_normal, outgoing, original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
+
+	final_value += value_ipto;
+	final_pdf += pdf_ipto;
+
+	// Case: i -> t -> p -> o.
+	// World space incoming direction reflected at tangent facet.	
+	foundation::Vector3f incoming_reflected =
+		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
+
+	DirectShadingComponents value_itpo;
+	float pdf_itpo = BSDFImpl::evaluate(
+		data,
+		adjoint,
+		false,
+		local_geometry,
+		outgoing,
+		incoming_reflected,
+		modes,
+		value_itpo); // fp(w'i, wo, wp)
+	
+	value_itpo *= lambda_t(perturbed_shading_normal, incoming, original_shading_normal) // lambda_t(wi)
+		* shift_cos_in_fast(mdot(outgoing, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
+		* G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		//* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+	
+	pdf_itpo *= lambda_t(perturbed_shading_normal, incoming, original_shading_normal) // lambda_t(wi)
+		* G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		//* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+
+	final_value += value_itpo;
+	final_pdf += pdf_itpo;
+
+	value = final_value;
+	return final_pdf;
 }
 
 template <typename BSDFImpl>
@@ -438,82 +487,85 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 	// World space original shading normal.
 	foundation::Vector3f original_shading_normal(local_geometry.m_shading_point->get_original_shading_normal());
 
-	// World space perturbed shading normal.
-	foundation::Vector3f perturbed_shading_normal(local_geometry.m_shading_point->get_shading_normal());
-
-	// World space tangent.
-	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
-
-	// Check incoming and outgoing for validity. Masking and intersection probability check.
+	// Check incoming and outgoing for validity. Check required for masking and intersection probability.
 	if (dot(incoming, original_shading_normal) <= 0.0f || dot(outgoing, original_shading_normal) <= 0.0f)
 	{
 		return 0.0f;
 	}
 
-	// TODO: check perturbed shading normal.
-	// ...
+	// World space perturbed shading normal.
+	foundation::Vector3f perturbed_shading_normal(local_geometry.m_shading_point->get_shading_normal());
 
-	// Case: i -> p -> o
-	if (lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) > 0.0f)
+	// TODO: dot(original_shading_normal, perturbed_shading_normal) <= 0?
+	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed).
+	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6)
 	{
-		float pdf_ipo =
-			BSDFImpl::evaluate_pdf(
-            data,
-            adjoint,
-            local_geometry,
-            outgoing,
-            incoming,
-            modes); // fp(wi, wo, wp)
-
-		final_pdf += lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
-			* pdf_ipo // fp(wi, wo, wp)
-			* G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-
-		// Case: i -> p -> t -> o
-		if(dot(incoming, tangent) > 1e-6)
-		{
-			// World space incoming direction reflected at tangent facet.
-			foundation::Vector3f incoming_reflected =
-				-normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
-
-			float pdf_ipto =
-				BSDFImpl::evaluate_pdf(
-					data,
-					adjoint,
-					local_geometry,
-					outgoing,
-					incoming_reflected,
-					modes); // fp(wi, w'o, wp)
-
-			final_pdf += lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
-				* pdf_ipto // fp(wi, w'o, wp)
-				* G1(perturbed_shading_normal, incoming, original_shading_normal, false) // G1(wo, wt) * H(dot(wo, wt))
-				* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)); // 1-G1(w'o, wp) * H(dot(w'o, wp))
-		}
+		return BSDFImpl::evaluate_pdf(
+			data,
+			adjoint,
+			local_geometry,
+			outgoing,
+			incoming,
+			modes);
 	}
 
-	// Case: i -> t -> p -> o
-	if(lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) < 1.0f && dot(outgoing, tangent) > 1e-6)
-	{
-		// World space outgoing direction reflected at tangent facet.
-		foundation::Vector3f outgoing_reflected = 
-			-normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
+	// World space tangent.
+	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
 
-		const float pdf_itpo =
-			BSDFImpl::evaluate_pdf(
-					data,
-					adjoint,
-					local_geometry,
-					outgoing_reflected,
-					incoming,
-					modes); // fp(w'i, wo, wp)
+	// Case: i -> p -> o.
+	float pdf_ipo =
+		BSDFImpl::evaluate_pdf(
+		data,
+		adjoint,
+		local_geometry,
+		outgoing,
+		incoming,
+		modes); // fp(wi, wo, wp)
 
-		// Apply microfacet based normal mapping on pdf.
-		final_pdf += lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_t(wi)
-			* pdf_itpo; // fp(w'i, wo, wp)
-			// * G1(perturbed_shading_normal, incoming, original_shading_normal, true) // G1(wo, wp) * H(dot(wo, wp))
-			// * (1.0f - G1(tangent, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt))
-	}
+	final_pdf += lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
+		* pdf_ipo // fp(wi, wo, wp)
+		* G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+	
+	// Case: i -> p -> t -> o.
+
+	// World space outgoing direction reflected at tangent facet.
+	foundation::Vector3f outgoing_reflected = 
+		normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
+
+	float pdf_ipto =
+		BSDFImpl::evaluate_pdf(
+			data,
+			adjoint,
+			local_geometry,
+			outgoing_reflected,
+			incoming,
+			modes); // fp(wi, w'o, wp)
+
+	final_pdf += lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
+		* pdf_ipto // fp(wi, w'o, wp)
+		* G1(perturbed_shading_normal, outgoing, original_shading_normal, false) // G1(wo, wt) * H(dot(wo, wt))
+		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)); // 1-G1(w'o, wp) * H(dot(w'o, wp)) = 1
+	
+	// Case: i -> t -> p -> o.
+
+	// World space incoming direction reflected at tangent facet.
+	foundation::Vector3f incoming_reflected =
+		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
+
+	const float pdf_itpo =
+		BSDFImpl::evaluate_pdf(
+				data,
+				adjoint,
+				local_geometry,
+				outgoing,
+				incoming_reflected,
+				modes); // fp(w'i, wo, wp)
+
+	final_pdf += lambda_t(perturbed_shading_normal, incoming, original_shading_normal) // lambda_t(wi)
+		* pdf_itpo // fp(w'i, wo, wp)
+	    * G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		// * (1.0f - G1(tangent, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+	
 	return final_pdf;
 }
 
