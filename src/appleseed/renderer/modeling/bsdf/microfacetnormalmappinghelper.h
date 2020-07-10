@@ -209,7 +209,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 
 	// TODO: dot(original_shading_normal, perturbed_shading_normal) <= 0.0f?
 	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed)
-	if((dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6))
+	if((dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 10e-5))
 	{
 		BSDFImpl::sample(
 			sampling_context,
@@ -265,7 +265,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		local_geometry,
 		foundation::Dual3f(outgoing_reflected),
 		modes,
-		ipto_sample); // fp(w'o, wp). Note: incoming can not be reflected here because it is caclulated in BRDF.
+		ipto_sample); // fp(w'o, wp). 
 	
 	ipto_sample.m_value *= lambda_p(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
 		* shift_cos_in_fast(mdot(outgoing_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // <w'o, wp>
@@ -288,7 +288,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		local_geometry,
 		outgoing,
 		modes,
-		itpo_sample); // fp(wo, wp)
+		itpo_sample); // fp(wo, wp). Note: incoming can not be reflected here because it is caclulated in BRDF.
 
 	// World space incoming direction reflected on tangent facet.
 	//foundation::Vector3f incoming_reflected = 
@@ -371,7 +371,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 
 	// TODO dot(original_shading_normal, perturbed_shading_normal) <= 0?
 	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed).
-	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6)
+	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 10e-5)
 	{
 		return BSDFImpl::evaluate(
             data,
@@ -498,7 +498,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 
 	// TODO: dot(original_shading_normal, perturbed_shading_normal) <= 0?
 	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed).
-	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6)
+	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 10e-5)
 	{
 		return BSDFImpl::evaluate_pdf(
 			data,
