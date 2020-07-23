@@ -37,6 +37,7 @@
 #include "renderer/kernel/shading/shadingpoint.h"
 #include "renderer/modeling/bsdf/bsdfsample.h"
 #include "renderer/utility/shadowterminator.h"
+#include "renderer/modeling/color/colorspace.h"
 
 // appleseed.foundation headers.
 #include "foundation/math/basis.h"
@@ -50,6 +51,8 @@ namespace renderer
 // Based on Microfacet based normal mapping (Heitz et al.).
 // https://blogs.unity3d.com/2017/10/02/microfacet-based-normal-mapping-for-robust-monte-carlo-path-tracing/
 //
+// Light: wi, i (paper, mitsuba). incoming (appleseed)
+// View: wo, o (paper, mitsuba). outgoing (appleseed)
 
 static float heaviside(float a)
 {
@@ -237,24 +240,19 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		adjoint,
 		false,
 		local_geometry,
-		outgoing,
+		outgoing, // wi
 		modes,
 		ipo_sample); // fp(wi, wp)
 	
-	ipo_sample.m_value *= lambda_p(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
-		* shift_cos_in_fast(mdot(outgoing.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
-		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
+	ipo_sample.m_value *= lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
+		* shift_cos_in_fast(mdot(ipo_sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
+		* G1(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
 	
 	ipo_pdf = ipo_sample.get_probability() // fp(wi, wp)
-	    * lambda_p(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
-		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+	    * lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
+		* G1(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
 
 	// Case: i -> p -> t -> o.
-
-	// World space outgoing reflected.
-	foundation::Vector3f outgoing_reflected = 
-        normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent);
-
 	BSDFSample ipto_sample;
 	float ipto_pdf = 0.0f;
 	BSDFImpl::sample(
@@ -263,21 +261,30 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		adjoint,
 		false,
 		local_geometry,
-		foundation::Dual3f(outgoing_reflected),
+		outgoing, // wi
 		modes,
 		ipto_sample); // fp(w'o, wp). 
+
+	// World space incoming direction reflected on tangent facet.
+	foundation::Vector3f incoming_reflected = 
+		normalize(ipto_sample.m_incoming.get_value() - 2.0f * dot(ipto_sample.m_incoming.get_value(), tangent) * tangent);
 	
-	ipto_sample.m_value *= lambda_p(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
-		* shift_cos_in_fast(mdot(outgoing_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // <w'o, wp>
-		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
-		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
+	ipto_sample.m_value *= lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
+		* shift_cos_in_fast(mdot(incoming_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // <w'o, wp>
+		* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
+		* G1(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
 
 	ipto_pdf = ipto_sample.get_probability() // fp(wi, wp)
-		* lambda_p(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal) // lambda_p(wi)
-		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)) // 1-G1(w'o, wp) * H(dot(w'o, wp))
-		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, false); // G1(wo, wt) * H(dot(wo, wt))
+		* lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
+		* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) // 1-G1(w'o, wp) * H(dot(w'o, wp))
+		* G1(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal, false); // G1(wo, wt) * H(dot(wo, wt))
 	
-	// Case: i -> t -> p -> o
+	// Case: i -> t -> p -> o.
+
+	// World space outgoing reflected.
+	foundation::Vector3f outgoing_reflected = 
+        normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent); // w'i
+
 	BSDFSample itpo_sample;
 	float itpo_pdf = 0.0f;
 	BSDFImpl::sample(
@@ -285,26 +292,23 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		data,
 		adjoint,
 		false,
-		local_geometry,
-		outgoing,
+		local_geometry, 
+		foundation::Dual3f(outgoing_reflected), // w'i
 		modes,
 		itpo_sample); // fp(wo, wp). Note: incoming can not be reflected here because it is caclulated in BRDF.
 
-	// World space incoming direction reflected on tangent facet.
-	//foundation::Vector3f incoming_reflected = 
-	//	normalize(itpo_sample.m_incoming.get_value() - 2.0f * dot(itpo_sample.m_incoming.get_value(), tangent) * tangent);
-	
-	itpo_sample.m_value *= lambda_t(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal) // lambda_t(wi)
-		* shift_cos_in_fast(mdot(outgoing.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
-		* G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-		//* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+	itpo_sample.m_value *= lambda_t(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_t(wi)
+		* shift_cos_in_fast(mdot(itpo_sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
+		* G1(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		//* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
 
 	itpo_pdf = itpo_sample.get_probability() // fp(w'i, wp)
-		* lambda_t(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal) // lambda_t(wi)
-	    * G1(perturbed_shading_normal, outgoing.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-		// * (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+		* lambda_t(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_t(wi)
+	    * G1(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		// * (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
 
 	// Final incoming direction.
+	// TODO Doesn't seem right. 
 	if(lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.5f)
 		sample.m_incoming = ipo_sample.m_incoming;
 	else
@@ -321,6 +325,12 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 	sample.m_value += ipo_sample.m_value;
 	sample.m_value += ipto_sample.m_value;
 	sample.m_value += itpo_sample.m_value;
+
+	// In case of only the point light, sample is not contributing!
+	/*sample.m_value.m_beauty.set(
+			foundation::Color3f(0.1f, 0.8f, 0.88f), 
+			g_std_lighting_conditions,
+			Spectrum::Intent::Reflectance);*/
 
 	// Final pdf.
 	float final_pdf = ipo_pdf + ipto_pdf + itpo_pdf;
@@ -373,7 +383,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed).
 	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 10e-5)
 	{
-		return BSDFImpl::evaluate(
+		float default_pdf = BSDFImpl::evaluate(
             data,
             adjoint,
             false,
@@ -382,6 +392,13 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
             incoming,
             modes,
             value);
+
+	/*	value.m_beauty.set(
+			foundation::Color3f(0.0f, 0.18f, 0.88f), // blue
+			g_std_lighting_conditions,
+			Spectrum::Intent::Reflectance);*/
+
+		return default_pdf;
 	}
 
 	// World space tangent.
@@ -400,22 +417,29 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
             incoming,
             modes,
             value_ipo); // fp(wi, wo, wp)
+
+	value_ipo *= lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
+    	* shift_cos_in_fast(mdot(incoming, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
+        * G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
 	
-	value_ipo *= lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
-    	* shift_cos_in_fast(mdot(outgoing, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
-        * G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
-	
-	pdf_ipo *= lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
-		* G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
+	pdf_ipo *= lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
+		* G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
 
 	final_value += value_ipo;
 	final_pdf += pdf_ipo;
 
+	/*if(lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) > 0.0f && 
+		G1(perturbed_shading_normal, incoming, original_shading_normal, true) >0.0f)
+			final_value.m_beauty.set(
+				foundation::Color3f(0.1f, 0.8f, 0.0f), // green
+				g_std_lighting_conditions,
+				Spectrum::Intent::Reflectance);*/
+
 	// Case: i -> p -> t -> o.
 
-	// World space outgoing direction reflected at tangent facet.
-	foundation::Vector3f outgoing_reflected = 
-		normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
+	// World space incoming direction reflected at tangent facet.	
+	foundation::Vector3f incoming_reflected =
+		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
 
 	DirectShadingComponents value_ipto;
 	float pdf_ipto = BSDFImpl::evaluate(
@@ -423,27 +447,35 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 		adjoint,
 		false,
 		local_geometry,
-		outgoing_reflected,
-		incoming,
+		outgoing,
+		incoming_reflected,
 		modes,
 		value_ipto); // fp(wi, w'o, wp)
 
-	value_ipto *= lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
-		* shift_cos_in_fast(mdot(outgoing_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // <w'o, wp>
-		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
-		* G1(perturbed_shading_normal, outgoing, original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
+	value_ipto *= lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
+		* shift_cos_in_fast(mdot(incoming_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // <w'o, wp>
+		* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
+		* G1(perturbed_shading_normal, incoming, original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
 
-	pdf_ipto *= lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
-		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
-		* G1(perturbed_shading_normal, outgoing, original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
+	pdf_ipto *= lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
+		* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
+		* G1(perturbed_shading_normal, incoming, original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
 
 	final_value += value_ipto;
 	final_pdf += pdf_ipto;
 
+	/*if(lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) > 0.0f && 
+		G1(perturbed_shading_normal, incoming, original_shading_normal, false) > 0.0f && 
+		(1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) > 0.0f)
+			final_value.m_beauty.set(
+				foundation::Color3f(0.8f, 0.16f, 0.24f), // cherry red
+				g_std_lighting_conditions,
+				Spectrum::Intent::Reflectance);
+*/
 	// Case: i -> t -> p -> o.
-	// World space incoming direction reflected at tangent facet.	
-	foundation::Vector3f incoming_reflected =
-		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
+	// World space outgoing direction reflected at tangent facet.
+	foundation::Vector3f outgoing_reflected = 
+		normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
 
 	DirectShadingComponents value_itpo;
 	float pdf_itpo = BSDFImpl::evaluate(
@@ -451,23 +483,30 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 		adjoint,
 		false,
 		local_geometry,
-		outgoing,
-		incoming_reflected,
+		outgoing_reflected,
+		incoming,
 		modes,
 		value_itpo); // fp(w'i, wo, wp)
-	
-	value_itpo *= lambda_t(perturbed_shading_normal, incoming, original_shading_normal) // lambda_t(wi)
-		* shift_cos_in_fast(mdot(outgoing, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
-		* G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+
+	value_itpo *= lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_t(wi)
+		* shift_cos_in_fast(mdot(incoming, perturbed_shading_normal), shadow_terminator_freq_mult) // <wo, wp>
+		* G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
 		//* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
 	
-	pdf_itpo *= lambda_t(perturbed_shading_normal, incoming, original_shading_normal) // lambda_t(wi)
-		* G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+	pdf_itpo *= lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_t(wi)
+		* G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
 		//* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
 
 	final_value += value_itpo;
 	final_pdf += pdf_itpo;
-
+/*
+	if(lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) > 0.0f && 
+		G1(perturbed_shading_normal, incoming, original_shading_normal, true) > 0.0f)
+			final_value.m_beauty.set(
+				foundation::Color3f(0.8f, 0.8f, 0.1f), // yellow
+				g_std_lighting_conditions,
+				Spectrum::Intent::Reflectance);
+*/
 	value = final_value;
 	return final_pdf;
 }
@@ -477,8 +516,8 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
         const void*                 data,
         const bool                  adjoint,
         const LocalGeometry&        local_geometry,
-        const foundation::Vector3f& outgoing,
-        const foundation::Vector3f& incoming,
+        const foundation::Vector3f& outgoing, // wi, i - view
+        const foundation::Vector3f& incoming, // wo, o - light
         const int                   modes) const
 {
 	// BSDF pdf.
@@ -522,48 +561,48 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 		incoming,
 		modes); // fp(wi, wo, wp)
 
-	final_pdf += lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
+	final_pdf += lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
 		* pdf_ipo // fp(wi, wo, wp)
-		* G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		* G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
 	
 	// Case: i -> p -> t -> o.
 
 	// World space outgoing direction reflected at tangent facet.
-	foundation::Vector3f outgoing_reflected = 
-		normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
+	foundation::Vector3f incoming_reflected =
+		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
 
 	float pdf_ipto =
 		BSDFImpl::evaluate_pdf(
 			data,
 			adjoint,
 			local_geometry,
-			outgoing_reflected,
-			incoming,
+			outgoing,
+			incoming_reflected,
 			modes); // fp(wi, w'o, wp)
 
-	final_pdf += lambda_p(perturbed_shading_normal, incoming, original_shading_normal) // lambda_p(wi)
+	final_pdf += lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_p(wi)
 		* pdf_ipto // fp(wi, w'o, wp)
-		* G1(perturbed_shading_normal, outgoing, original_shading_normal, false) // G1(wo, wt) * H(dot(wo, wt))
-		* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, true)); // 1-G1(w'o, wp) * H(dot(w'o, wp)) = 1
+		* G1(perturbed_shading_normal, incoming, original_shading_normal, false) // G1(wo, wt) * H(dot(wo, wt))
+		* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)); // 1-G1(w'o, wp) * H(dot(w'o, wp)) = 1
 	
 	// Case: i -> t -> p -> o.
 
 	// World space incoming direction reflected at tangent facet.
-	foundation::Vector3f incoming_reflected =
-		normalize(incoming - 2.0f * dot(incoming, tangent) * tangent);
+	foundation::Vector3f outgoing_reflected = 
+		normalize(outgoing - 2.0f * dot(outgoing, tangent) * tangent);
 
 	const float pdf_itpo =
 		BSDFImpl::evaluate_pdf(
 				data,
 				adjoint,
 				local_geometry,
-				outgoing,
-				incoming_reflected,
+				outgoing_reflected,
+				incoming,
 				modes); // fp(w'i, wo, wp)
 
-	final_pdf += lambda_t(perturbed_shading_normal, incoming, original_shading_normal) // lambda_t(wi)
+	final_pdf += lambda_t(perturbed_shading_normal, outgoing, original_shading_normal) // lambda_t(wi)
 		* pdf_itpo // fp(w'i, wo, wp)
-	    * G1(perturbed_shading_normal, outgoing, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+	    * G1(perturbed_shading_normal, incoming, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
 		// * (1.0f - G1(tangent, incoming_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
 	
 	return final_pdf;

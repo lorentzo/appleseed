@@ -230,7 +230,8 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
     bool use_microfacet_normal_mapping = true;
     float probability = 0.0f;
 
-    if (!use_microfacet_normal_mapping && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    // TODO: check once more if cull is needed for microfacet modification.
+    if (Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
     if (use_microfacet_normal_mapping)
@@ -298,7 +299,8 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate_pdf(
     bool use_microfacet_normal_mapping = true;
     float probability = 0.0f;
 
-    if (!use_microfacet_normal_mapping && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    // TODO: check once more if cull is needed for microfacet modification.
+    if (Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
     if (use_microfacet_normal_mapping)
