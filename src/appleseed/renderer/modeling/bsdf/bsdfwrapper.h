@@ -144,7 +144,11 @@ void BSDFWrapper<BSDFImpl, Cull>::sample(
     sampling_context = backup_sampling_context;
 #endif
     
-    bool use_microfacet_normal_mapping = true; // TODO: obtain this flag from data
+    bool use_microfacet_normal_mapping;
+    if(microfacet_normal_mapping.get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
+        use_microfacet_normal_mapping = true;
+    else
+        use_microfacet_normal_mapping = false;
     
     if (use_microfacet_normal_mapping)
         microfacet_normal_mapping.sample(
@@ -193,6 +197,9 @@ void BSDFWrapper<BSDFImpl, Cull>::sample(
         //             (sample.m_probability > 0.0f && ref_probability == 0.0f));  // todo: this case is worrisome!
         // #endif
 
+        // Cosine weight in this form is not correct for microfacet normal mapping.
+        // The reason is because incoming in ITPO case is reflected and this check is not taking that in account.
+        // Corrected cosine weight for non-adjoint is added in microfacetnormalmappinghelper.h.
         if (!use_microfacet_normal_mapping && cosine_mult)
         {
             if (adjoint)
@@ -227,11 +234,18 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
     assert(foundation::is_normalized(outgoing));
     assert(foundation::is_normalized(incoming));
 
-    bool use_microfacet_normal_mapping = true;
+    bool use_microfacet_normal_mapping;
+    if(microfacet_normal_mapping.get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
+        use_microfacet_normal_mapping = true;
+    else
+        use_microfacet_normal_mapping = false;
+
     float probability = 0.0f;
 
-    // TODO: check once more if cull is needed for microfacet modification.
-    if (Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    // Cull check in this form is not correct for microfacet normal mapping.
+    // The reason is because incoming in ITPO case is reflected and this check is not taking that in account.
+    // Corrected check for non-adjoint, BSDF::Reflective is added in microfacetnormalmappinghelper.h.
+    if (!use_microfacet_normal_mapping && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
     if (use_microfacet_normal_mapping)
@@ -263,6 +277,9 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
     {
         assert(value.is_valid());
 
+        // Cosine weight in this form is not correct for microfacet normal mapping.
+        // The reason is because incoming in ITPO case is reflected and this check is not taking that in account.
+        // Corrected cosine weight for non-adjoint is added in microfacetnormalmappinghelper.h.
         if (!use_microfacet_normal_mapping && cosine_mult)
         {
             if (adjoint)
@@ -296,11 +313,18 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate_pdf(
     assert(foundation::is_normalized(outgoing));
     assert(foundation::is_normalized(incoming));
 
-    bool use_microfacet_normal_mapping = true;
+    bool use_microfacet_normal_mapping;
+    if(microfacet_normal_mapping.get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
+        use_microfacet_normal_mapping = true;
+    else
+        use_microfacet_normal_mapping = false;
+
     float probability = 0.0f;
 
-    // TODO: check once more if cull is needed for microfacet modification.
-    if (Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
+    // Cull check in this form is not correct for microfacet normal mapping.
+    // The reason is because incoming in ITPO case is reflected and this check is not taking that in account.
+    // Corrected check for non-adjoint, BSDF::Reflective is added in microfacetnormalmappinghelper.h.
+    if (!use_microfacet_normal_mapping && Cull && is_culled(adjoint, local_geometry.m_shading_basis, outgoing, incoming))
         return 0.0f;
 
     if (use_microfacet_normal_mapping)
