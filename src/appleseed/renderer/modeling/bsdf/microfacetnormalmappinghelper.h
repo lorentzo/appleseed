@@ -223,6 +223,12 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 			outgoing,
 			modes,
 			sample);
+
+		/*sample.m_value.m_beauty.set(
+			foundation::Color3f(0.0f, 0.18f, 0.88f), // blue
+			g_std_lighting_conditions,
+			Spectrum::Intent::Reflectance);*/
+		
 		return;
 	}
 
@@ -251,7 +257,14 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 	ipo_pdf = ipo_sample.get_probability() // fp(wi, wp)
 	    * lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
 		* G1(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-
+	/*
+	if(lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.0f && 
+		G1(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal, true) >0.0f)
+			sample.m_value.m_beauty.set(
+				foundation::Color3f(0.1f, 0.8f, 0.0f), // green
+				g_std_lighting_conditions,
+				Spectrum::Intent::Reflectance);
+	*/
 	// Case: i -> p -> t -> o.
 	BSDFSample ipto_sample;
 	float ipto_pdf = 0.0f;
@@ -278,7 +291,15 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		* lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
 		* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) // 1-G1(w'o, wp) * H(dot(w'o, wp))
 		* G1(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal, false); // G1(wo, wt) * H(dot(wo, wt))
-	
+	/*
+	if(lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.0f && 
+		G1(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal, false) > 0.0f && 
+		(1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) > 0.0f)
+			sample.m_value.m_beauty.set(
+				foundation::Color3f(0.8f, 0.16f, 0.24f), // cherry red
+				g_std_lighting_conditions,
+				Spectrum::Intent::Reflectance);
+	*/
 	// Case: i -> t -> p -> o.
 
 	// World space outgoing reflected.
@@ -306,6 +327,14 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 		* lambda_t(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_t(wi)
 	    * G1(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
 		// * (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+	/*
+	if(lambda_t(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.0f && 
+		G1(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal, true) > 0.0f)
+			sample.m_value.m_beauty.set(
+				foundation::Color3f(0.8f, 0.8f, 0.1f), // yellow
+				g_std_lighting_conditions,
+				Spectrum::Intent::Reflectance);
+	*/
 
 	// Final incoming direction.
 	// TODO Doesn't seem right. 
@@ -473,7 +502,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 		final_value += value_ipto;
 		final_pdf += pdf_ipto;
 
-		/*
+		
 		if(lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) > 0.0f && 
 			G1(perturbed_shading_normal, incoming, original_shading_normal, false) > 0.0f && 
 			(1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) > 0.0f)
@@ -481,7 +510,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 					foundation::Color3f(0.8f, 0.16f, 0.24f), // cherry red
 					g_std_lighting_conditions,
 					Spectrum::Intent::Reflectance);
-		*/
+		
 	}
 
 	// Case: i -> t -> p -> o.
