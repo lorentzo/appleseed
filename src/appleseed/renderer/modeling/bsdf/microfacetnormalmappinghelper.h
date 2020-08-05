@@ -237,132 +237,112 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 
 	const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
-	// Case: i -> p -> o.
-	BSDFSample ipo_sample;
-	float ipo_pdf = 0.0f;
-	BSDFImpl::sample(
-		sampling_context,
-		data,
-		adjoint,
-		false,
-		local_geometry,
-		outgoing, // wi
-		modes,
-		ipo_sample); // fp(wi, wp)
-	
-	ipo_sample.m_value *= lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
-		* shift_cos_in_fast(mdot(ipo_sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // cosine weight, non-adjoint <wo, wp>
-		* G1(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp)*H(dot(wo, wp))
-	
-	ipo_pdf = ipo_sample.get_probability() // fp(wi, wp)
-	    * lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
-		* G1(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-	/*
-	if(lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.0f && 
-		G1(perturbed_shading_normal, ipo_sample.m_incoming.get_value(), original_shading_normal, true) >0.0f)
-			sample.m_value.m_beauty.set(
-				foundation::Color3f(0.1f, 0.8f, 0.0f), // green
-				g_std_lighting_conditions,
-				Spectrum::Intent::Reflectance);
-	*/
-	// Case: i -> p -> t -> o.
-	BSDFSample ipto_sample;
-	float ipto_pdf = 0.0f;
-	BSDFImpl::sample(
-		sampling_context,
-		data,
-		adjoint,
-		false,
-		local_geometry,
-		outgoing, // wi
-		modes,
-		ipto_sample); // fp(w'o, wp). 
-
-	// World space incoming direction reflected on tangent facet.
-	foundation::Vector3f incoming_reflected = 
-		normalize(ipto_sample.m_incoming.get_value() - 2.0f * dot(ipto_sample.m_incoming.get_value(), tangent) * tangent);
-	
-	ipto_sample.m_value *= lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
-		* shift_cos_in_fast(mdot(incoming_reflected, perturbed_shading_normal), shadow_terminator_freq_mult) // cosine weight, non-adjoint <w'o, wp>
-		* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) // 1-G1(w'o,wp) * H(dot(w'o, wp))
-		* G1(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal, false); //G1(wo, wt) * H(dot(wo, wt))
-
-	ipto_pdf = ipto_sample.get_probability() // fp(wi, wp)
-		* lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_p(wi)
-		* (1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) // 1-G1(w'o, wp) * H(dot(w'o, wp))
-		* G1(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal, false); // G1(wo, wt) * H(dot(wo, wt))
-	/*
-	if(lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.0f && 
-		G1(perturbed_shading_normal, ipto_sample.m_incoming.get_value(), original_shading_normal, false) > 0.0f && 
-		(1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) > 0.0f)
-			sample.m_value.m_beauty.set(
-				foundation::Color3f(0.8f, 0.16f, 0.24f), // cherry red
-				g_std_lighting_conditions,
-				Spectrum::Intent::Reflectance);
-	*/
-	// Case: i -> t -> p -> o.
-
-	// World space outgoing reflected.
-	foundation::Vector3f outgoing_reflected = 
-        normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent); // w'i
-
-	BSDFSample itpo_sample;
-	float itpo_pdf = 0.0f;
-	BSDFImpl::sample(
-		sampling_context,
-		data,
-		adjoint,
-		false,
-		local_geometry, 
-		foundation::Dual3f(outgoing_reflected), // w'i
-		modes,
-		itpo_sample); // fp(wo, wp). Note: incoming can not be reflected here because it is caclulated in BRDF.
-
-	itpo_sample.m_value *= lambda_t(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_t(wi)
-		* shift_cos_in_fast(mdot(itpo_sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // cosine weight, non-adjoint <wo, wp>
-		* G1(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-		//* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
-
-	itpo_pdf = itpo_sample.get_probability() // fp(w'i, wp)
-		* lambda_t(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) // lambda_t(wi)
-	    * G1(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
-		// * (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
-	/*
-	if(lambda_t(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.0f && 
-		G1(perturbed_shading_normal, itpo_sample.m_incoming.get_value(), original_shading_normal, true) > 0.0f)
-			sample.m_value.m_beauty.set(
-				foundation::Color3f(0.8f, 0.8f, 0.1f), // yellow
-				g_std_lighting_conditions,
-				Spectrum::Intent::Reflectance);
-	*/
-
-	// Final incoming direction.
-	// TODO Doesn't seem right. 
-	if(lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.5f)
-		sample.m_incoming = ipo_sample.m_incoming;
-	else
-		sample.m_incoming = itpo_sample.m_incoming;
-
-	// Check incoming for validity. If not valid return empty sample.
-	// TODO: set sample.m_incoming to Vector3f(0.0f, 0.0f, 0.0f)?
-	if (dot(sample.m_incoming.get_value(), original_shading_normal) <= 0.0f)
+	float final_pdf = 0.0f; 
+	if (lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > sampling_context.next2<float>())
 	{
-		return;
+		// Case: hit perturbed facet.
+		BSDFSample perturbed_facet_sample;
+		float perturbed_facet_pdf = 0.0f;
+		BSDFImpl::sample(
+			sampling_context,
+			data,
+			adjoint,
+			false,
+			local_geometry,
+			outgoing, // wi
+			modes,
+			perturbed_facet_sample); // fp(wi, wp) value
+
+		perturbed_facet_sample.m_value *= 
+			shift_cos_in_fast(mdot(perturbed_facet_sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult); // cosine weight, non-adjoint <wo, wp>
+
+		perturbed_facet_pdf = perturbed_facet_sample.get_probability(); // fp(wi, wp) pdf
+
+		if(G1(perturbed_shading_normal, perturbed_facet_sample.m_incoming.get_value(), original_shading_normal, true) > sampling_context.next2<float>())
+		{
+			// Sampled incoming direction was reflected on tangent facet (see Fig 10, right).
+			// Calculate reflected of incoming direction to find out the direction which intersects perturbed facet
+			// and calculate shadowing for this case.
+			foundation::Vector3f incoming_reflected = 
+				normalize(perturbed_facet_sample.m_incoming.get_value() - 2.0f * dot(perturbed_facet_sample.m_incoming.get_value(), tangent) * tangent);
+		
+			perturbed_facet_sample.m_value *= 
+				G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		
+			perturbed_facet_pdf *=
+				G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+		}
+		
+		/* Color coding of case where perturbed facet is sampled.
+		if(lambda_p(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.0f && 
+			G1(perturbed_shading_normal, perturbed_facet_sample.m_incoming.get_value(), original_shading_normal, true) >0.0f)
+				sample.m_value.m_beauty.set(
+					foundation::Color3f(0.1f, 0.8f, 0.0f), // green
+					g_std_lighting_conditions,
+					Spectrum::Intent::Reflectance);
+		*/
+		
+		sample.m_incoming = perturbed_facet_sample.m_incoming;
+
+		if (dot(sample.m_incoming.get_value(), original_shading_normal) <= 0.0f)
+		{
+			return;
+		}
+
+		sample.m_value = perturbed_facet_sample.m_value;
+		final_pdf = perturbed_facet_pdf;
+
+	} else 
+	{
+		// Case: hit tangent facet.
+		// Tangent facet is specular. Sampling tangent facet is actually sampling the perturbed facet
+		// with reflected outgoing direction. 
+		// World space outgoing reflected.
+		foundation::Vector3f outgoing_reflected = 
+			normalize(outgoing.get_value() - 2.0f * dot(outgoing.get_value(), tangent) * tangent); // w'i
+
+		BSDFSample tangent_facet_sample;
+		float tangent_facet_pdf = 0.0f;
+		BSDFImpl::sample(
+			sampling_context,
+			data,
+			adjoint,
+			false,
+			local_geometry, 
+			foundation::Dual3f(outgoing_reflected), // w'i
+			modes,
+			tangent_facet_sample); // fp(wo, wp). 
+
+		tangent_facet_sample.m_value *= 
+			shift_cos_in_fast(mdot(tangent_facet_sample.m_incoming.get_value(), perturbed_shading_normal), shadow_terminator_freq_mult) // cosine weight, non-adjoint <wo, wp>
+			* G1(perturbed_shading_normal, tangent_facet_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+			//* (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+		
+		tangent_facet_pdf = tangent_facet_sample.get_probability() // fp(w'i, wp)
+			* G1(perturbed_shading_normal, tangent_facet_sample.m_incoming.get_value(), original_shading_normal, true); // G1(wo, wp) * H(dot(wo, wp))
+			// * (1.0f - G1(perturbed_shading_normal, outgoing_reflected, original_shading_normal, false)); // 1-G1(w'i, wt) * H(dot(w'i, wt)) = 1
+		
+		/* Color code: sampling tangent facet.
+		if(lambda_t(perturbed_shading_normal, outgoing.get_value(), original_shading_normal) > 0.0f && 
+			G1(perturbed_shading_normal, tangent_facet_sample.m_incoming.get_value(), original_shading_normal, true) > 0.0f)
+				sample.m_value.m_beauty.set(
+					foundation::Color3f(0.8f, 0.8f, 0.1f), // yellow
+					g_std_lighting_conditions,
+					Spectrum::Intent::Reflectance);
+		*/
+
+		sample.m_incoming = tangent_facet_sample.m_incoming;
+
+		if (dot(sample.m_incoming.get_value(), original_shading_normal) <= 0.0f)
+		{
+			return;
+		}
+
+		sample.m_value = tangent_facet_sample.m_value;
+		final_pdf = tangent_facet_pdf;
 	}
 
-	// Final sample value.
-	sample.m_value += ipo_sample.m_value;
-	sample.m_value += ipto_sample.m_value;
-	sample.m_value += itpo_sample.m_value;
-
-	// In case of only the point light, sample is not contributing!
-	/*sample.m_value.m_beauty.set(
-			foundation::Color3f(0.1f, 0.8f, 0.88f), 
-			g_std_lighting_conditions,
-			Spectrum::Intent::Reflectance);*/
-
 	// Final pdf.
-	float final_pdf = ipo_pdf + ipto_pdf + itpo_pdf;
 	if(ScatteringMode::has_diffuse(modes))
 	{
 		sample.set_to_scattering(ScatteringMode::Diffuse, final_pdf);
@@ -502,7 +482,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 		final_value += value_ipto;
 		final_pdf += pdf_ipto;
 
-		
+		/*
 		if(lambda_p(perturbed_shading_normal, outgoing, original_shading_normal) > 0.0f && 
 			G1(perturbed_shading_normal, incoming, original_shading_normal, false) > 0.0f && 
 			(1.0f - G1(perturbed_shading_normal, incoming_reflected, original_shading_normal, true)) > 0.0f)
@@ -510,7 +490,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 					foundation::Color3f(0.8f, 0.16f, 0.24f), // cherry red
 					g_std_lighting_conditions,
 					Spectrum::Intent::Reflectance);
-		
+		*/
 	}
 
 	// Case: i -> t -> p -> o.
@@ -551,8 +531,14 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 						Spectrum::Intent::Reflectance);
 		*/
 	}
-
+	/*
+	final_value.m_beauty.set(
+		foundation::Color3f(0.f, 0.f, 0.f), 
+		g_std_lighting_conditions,
+		Spectrum::Intent::Reflectance);
+	*/
 	value = final_value;
+	
 	return final_pdf;
 }
 
