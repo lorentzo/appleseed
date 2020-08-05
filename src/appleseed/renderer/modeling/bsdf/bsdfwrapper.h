@@ -217,6 +217,12 @@ void BSDFWrapper<BSDFImpl, Cull>::sample(
             }
         }
     }
+/*
+    sample.m_value.m_beauty.set(
+        foundation::Color3f(0.2f, 0.8f, 0.9f), 
+        g_std_lighting_conditions,
+        Spectrum::Intent::Reflectance);
+        */
 }
 
 template <typename BSDFImpl, bool Cull>
@@ -297,6 +303,12 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
             }
         }
     }
+/*
+    value.m_beauty.set(
+        foundation::Color3f(0.f, 0.f, 0.f),  // 0.85f, 0.3f, 0.1f
+        g_std_lighting_conditions,
+        Spectrum::Intent::Reflectance);
+*/
     return probability;
 }
 
