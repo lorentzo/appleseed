@@ -319,7 +319,6 @@ namespace
                     }
                 }
             }
-
             assert(pdf >= 0.0f);
             return pdf;
         }
