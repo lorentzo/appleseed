@@ -105,7 +105,7 @@ class BSDFWrapper
         const foundation::Vector3f&     outgoing,
         const foundation::Vector3f&     incoming) const;
     
-    MicrofacetNormalMappingHelper<BSDFImpl> microfacet_normal_mapping;
+    MicrofacetNormalMappingHelper<BSDFImpl> microfacet_normal_mapping_helper;
 };
 
 
@@ -118,7 +118,7 @@ BSDFWrapper<BSDFImpl, Cull>::BSDFWrapper(
     const char*                         name,
     const ParamArray&                   params)
   : BSDFImpl(name, params)
-  , microfacet_normal_mapping(name, params)
+  , microfacet_normal_mapping_helper(name, params)
 {
 }
 
@@ -145,13 +145,13 @@ void BSDFWrapper<BSDFImpl, Cull>::sample(
 #endif
     
     bool use_microfacet_normal_mapping;
-    if(microfacet_normal_mapping.get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
+    if(local_geometry.m_shading_point->get_material()->get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
         use_microfacet_normal_mapping = true;
     else
         use_microfacet_normal_mapping = false;
     
     if (use_microfacet_normal_mapping)
-        microfacet_normal_mapping.sample(
+        microfacet_normal_mapping_helper.sample(
             sampling_context,
             data,
             adjoint,
@@ -239,13 +239,13 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
     assert(foundation::is_normalized(local_geometry.m_geometric_normal));
     assert(foundation::is_normalized(outgoing));
     assert(foundation::is_normalized(incoming));
-
+    
     bool use_microfacet_normal_mapping;
-    if(microfacet_normal_mapping.get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
+    if(local_geometry.m_shading_point->get_material()->get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
         use_microfacet_normal_mapping = true;
     else
         use_microfacet_normal_mapping = false;
-
+    
     float probability = 0.0f;
 
     // Cull check in this form is not correct for microfacet normal mapping.
@@ -256,7 +256,7 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate(
 
     if (use_microfacet_normal_mapping)
         probability = 
-            microfacet_normal_mapping.evaluate(
+            microfacet_normal_mapping_helper.evaluate(
                 data,
                 adjoint,
                 false,
@@ -326,7 +326,7 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate_pdf(
     assert(foundation::is_normalized(incoming));
 
     bool use_microfacet_normal_mapping;
-    if(microfacet_normal_mapping.get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
+    if(local_geometry.m_shading_point->get_material()->get_parameters().get_optional("microfacet_normal_mapping", 0.0f))
         use_microfacet_normal_mapping = true;
     else
         use_microfacet_normal_mapping = false;
@@ -341,7 +341,7 @@ float BSDFWrapper<BSDFImpl, Cull>::evaluate_pdf(
 
     if (use_microfacet_normal_mapping)
         probability = 
-            microfacet_normal_mapping.evaluate_pdf(
+            microfacet_normal_mapping_helper.evaluate_pdf(
                 data,
                 adjoint,
                 local_geometry,

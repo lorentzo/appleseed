@@ -65,6 +65,7 @@ namespace
             m_inputs.declare("alpha_map", InputFormat::Float, "");
             m_inputs.declare("displacement_map", InputFormat::SpectralReflectance, "");
             m_inputs.declare("volume", InputFormat::Entity, "");
+            m_inputs.declare("microfacet_normal_mapping", InputFormat::Float, "0.0");
         }
 
         void release() override
@@ -176,6 +177,22 @@ DictionaryArray GenericMaterialFactory::get_input_metadata() const
             .insert("entity_types",
                 Dictionary().insert("volume", "Volume"))
             .insert("use", "optional"));
+
+    metadata.push_back(
+        Dictionary()
+            .insert("name", "microfacet_normal_mapping")
+            .insert("label", "Microfacet Normal Mapping")
+            .insert("type", "numeric")
+            .insert("min",
+                Dictionary()
+                    .insert("value", "0.0")
+                    .insert("type", "hard"))
+            .insert("max",
+                Dictionary()
+                    .insert("value", "1.0")
+                    .insert("type", "hard"))
+            .insert("use", "optional")
+            .insert("default", "0.0"));        
 
     add_alpha_map_metadata(metadata);
     add_displacement_metadata(metadata);

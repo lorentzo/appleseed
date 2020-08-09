@@ -68,6 +68,7 @@ namespace
         {
             m_inputs.declare("osl_surface", InputFormat::Entity, "");
             m_inputs.declare("alpha_map", InputFormat::Float, "");
+            m_inputs.declare("microfacet_normal_mapping", InputFormat::Float, "0.0");
 
             m_osl_bsdf = OSLBSDFFactory().create();
             m_osl_bssrdf = OSLBSSRDFFactory().create();
@@ -198,6 +199,22 @@ DictionaryArray OSLMaterialFactory::get_input_metadata() const
                 Dictionary()
                     .insert("shader_group", "Shader Groups"))
             .insert("use", "optional"));
+
+    metadata.push_back(
+        Dictionary()
+            .insert("name", "microfacet_normal_mapping")
+            .insert("label", "Microfacet Normal Mapping")
+            .insert("type", "numeric")
+            .insert("min",
+                Dictionary()
+                    .insert("value", "0.0")
+                    .insert("type", "hard"))
+            .insert("max",
+                Dictionary()
+                    .insert("value", "1.0")
+                    .insert("type", "hard"))
+            .insert("use", "optional")
+            .insert("default", "0.0"));    
 
     add_alpha_map_metadata(metadata);
     add_default_tangent_mode_metadata(metadata);

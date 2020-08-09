@@ -76,12 +76,16 @@ static float cdot(foundation::Vector3f a, foundation::Vector3f b)
 	return std::max(foundation::dot(a, b), 0.0f);
 }
 
-// TODO: use only one lambda function with flag for wp or wt.
 // Note: cdot(a,b) is used for safe calculation because it "checks" if vectors are dot(a,b)<0.
 static float lambda_p(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
 {	
+	foundation::Basis3f original_shading_basis(wg);
+	foundation::Vector3f local_perturbed_shading_normal = original_shading_basis.transform_to_local(wp);
+	foundation::Vector3f local_tangent = normalize(foundation::Vector3f(-local_perturbed_shading_normal.x, 0.0f, -local_perturbed_shading_normal.z)); // Appleseed has y up in local space
+	foundation::Vector3f wt = original_shading_basis.transform_to_parent(local_tangent);
+	//foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
+
 	float wi_dot_wp = cdot(wi, wp);
-	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
 	float wi_dot_wt = cdot(wi, wt);
 	float wp_dot_wg = cdot(wp, wg);
 
@@ -93,7 +97,11 @@ static float lambda_p(foundation::Vector3f wp, foundation::Vector3f wi, foundati
 
 static float lambda_t(foundation::Vector3f wp, foundation::Vector3f wi, foundation::Vector3f wg)
 {
-	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
+	foundation::Basis3f original_shading_basis(wg);
+	foundation::Vector3f local_perturbed_shading_normal = original_shading_basis.transform_to_local(wp);
+	foundation::Vector3f local_tangent = normalize(foundation::Vector3f(-local_perturbed_shading_normal.x, 0.0f, -local_perturbed_shading_normal.z)); // Appleseed has y up in local space
+	foundation::Vector3f wt = original_shading_basis.transform_to_parent(local_tangent);
+	//foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
 	
 	float wi_dot_wp = cdot(wi, wp);
 	float wi_dot_wt = cdot(wi, wt);
@@ -111,7 +119,11 @@ static float G1(foundation::Vector3f wp, foundation::Vector3f w, foundation::Vec
 		return 0.0f;
 
 	float H = 1.0f;
-	foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
+	foundation::Basis3f original_shading_basis(wg);
+	foundation::Vector3f local_perturbed_shading_normal = original_shading_basis.transform_to_local(wp);
+	foundation::Vector3f local_tangent = normalize(foundation::Vector3f(-local_perturbed_shading_normal.x, 0.0f, -local_perturbed_shading_normal.z)); // Appleseed has y up in local space
+	foundation::Vector3f wt = original_shading_basis.transform_to_parent(local_tangent);
+	//foundation::Vector3f wt = normalize(foundation::Vector3f(-wp.x, -wp.y, 0.0f));
 	
 	if(w_wp)
 	{
@@ -212,7 +224,7 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 
 	// TODO: dot(original_shading_normal, perturbed_shading_normal) <= 0.0f?
 	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed)
-	if((dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6)) // 10e-5
+	if((dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-5)) // 10e-5
 	{
 		BSDFImpl::sample(
 			sampling_context,
@@ -233,7 +245,11 @@ void MicrofacetNormalMappingHelper<BSDFImpl>::sample(
 	}
 
 	// World space tangent.
-	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
+	foundation::Basis3f original_shading_basis(original_shading_normal);
+	foundation::Vector3f local_perturbed_shading_normal = original_shading_basis.transform_to_local(perturbed_shading_normal);
+	foundation::Vector3f local_tangent = normalize(foundation::Vector3f(-local_perturbed_shading_normal.x, 0.0f, -local_perturbed_shading_normal.z));
+	foundation::Vector3f tangent = original_shading_basis.transform_to_parent(local_tangent);
+	//foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
 
 	const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
 
@@ -390,7 +406,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 
 	// TODO dot(original_shading_normal, perturbed_shading_normal) <= 0?
 	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed).
-	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6)
+	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-5)
 	{
 		float default_pdf = BSDFImpl::evaluate(
             data,
@@ -411,8 +427,15 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate(
 		return default_pdf;
 	}
 
-	// World space tangent.
-	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
+	// World space tangent is calculated based on perturbed shading normal.
+	//RENDERER_LOG_ERROR("original normal %f %f %f", original_shading_normal.x, original_shading_normal.y, original_shading_normal.z);
+	//RENDERER_LOG_ERROR("perturbed_shading_normal %f %f %f", perturbed_shading_normal.x, perturbed_shading_normal.y, perturbed_shading_normal.z);
+	foundation::Basis3f original_shading_basis(original_shading_normal);
+	foundation::Vector3f local_perturbed_shading_normal = original_shading_basis.transform_to_local(perturbed_shading_normal);
+	foundation::Vector3f local_tangent = normalize(foundation::Vector3f(-local_perturbed_shading_normal.x, 0.0f, -local_perturbed_shading_normal.z));
+	foundation::Vector3f tangent = original_shading_basis.transform_to_parent(local_tangent);
+	//RENDERER_LOG_ERROR("local_perturbed_shading_normal %f %f %f", local_perturbed_shading_normal.x, local_perturbed_shading_normal.y, local_perturbed_shading_normal.z);
+	//RENDERER_LOG_ERROR("tangent %f %f %f", tangent.x, tangent.y, tangent.z);
 
 	// Factor for cosine weight.
 	const float shadow_terminator_freq_mult = local_geometry.m_shading_point->get_object_instance().get_render_data().m_shadow_terminator_freq_mult;
@@ -568,7 +591,7 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 
 	// TODO: dot(original_shading_normal, perturbed_shading_normal) <= 0?
 	// In this case perturbed is too similar to original and modification can not be used (tangent vector can not be constructed).
-	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-6)
+	if(dot(original_shading_normal, perturbed_shading_normal) > 1.0f - 1e-5)
 	{
 		return BSDFImpl::evaluate_pdf(
 			data,
@@ -580,7 +603,11 @@ float MicrofacetNormalMappingHelper<BSDFImpl>::evaluate_pdf(
 	}
 
 	// World space tangent.
-	foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
+	foundation::Basis3f original_shading_basis(original_shading_normal);
+	foundation::Vector3f local_perturbed_shading_normal = original_shading_basis.transform_to_local(perturbed_shading_normal);
+	foundation::Vector3f local_tangent = normalize(foundation::Vector3f(-local_perturbed_shading_normal.x, 0.0f, -local_perturbed_shading_normal.z));
+	foundation::Vector3f tangent = original_shading_basis.transform_to_parent(local_tangent);
+	//foundation::Vector3f tangent = normalize(foundation::Vector3f(-perturbed_shading_normal.x, -perturbed_shading_normal.y, 0.0f));
 
 	// Case: i -> p -> o.
 	if (foundation::dot(incoming, perturbed_shading_normal) >= 0.0f) // cull check for non-adjoint, BSDF::reflective

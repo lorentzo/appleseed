@@ -62,7 +62,6 @@ APPLESEED_DECLARE_INPUT_VALUES(MetalBRDFInputValues)
     float       m_roughness;
     float       m_anisotropy;
     float       m_energy_compensation;
-    float       m_microfacet_normal_mapping; // microfacet normal mapping switch.       
 
     struct Precomputed
     {
