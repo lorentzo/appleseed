@@ -226,22 +226,6 @@ DictionaryArray LambertianBRDFFactory::get_input_metadata() const
             .insert("use", "optional")
             .insert("default", "1.0"));
 
-    metadata.push_back(
-        Dictionary()
-            .insert("name", "microfacet_normal_mapping")
-            .insert("label", "Microfacet Normal Mapping")
-            .insert("type", "numeric")
-            .insert("min",
-                Dictionary()
-                    .insert("value", "0.0")
-                    .insert("type", "hard"))
-            .insert("max",
-                Dictionary()
-                    .insert("value", "1.0")
-                    .insert("type", "hard"))
-            .insert("use", "optional")
-            .insert("default", "0.0"));
-
     return metadata;
 }
 
