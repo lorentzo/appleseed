@@ -76,7 +76,7 @@
                 </alpha>
             </color>
         	<texture name="normal" model="disk_texture_2d">
-                <parameter name="color_space" value="linar_rgb" /> <!-- srgb PNG? linar_rgb jpg? -->
+                <parameter name="color_space" value="linear_rgb" /> <!-- srgb PNG? linar_rgb jpg? -->
                 <parameter name="filename" value="sources/simple6_DX.png" />
             </texture>
             <texture_instance name="normal_inst" texture="normal">
@@ -95,9 +95,9 @@
             <bsdf name="metal_brdf" model="metal_brdf">
                 <parameter name="anisotropy" value="0.0" />
                 <parameter name="edge_tint" value="0.0" />
-                <parameter name="normal_reflectance" value="0.5" />
+                <parameter name="normal_reflectance" value="0.92" /> <!-- Al -->
                 <parameter name="reflectance_multiplier" value="1.0" />
-                <parameter name="roughness" value="0.5" /> <!-- alpha = roughness * roughness -->
+                <parameter name="roughness" value="0.0" /> <!-- alpha = roughness * roughness -->
                 <parameter name="microfacet_normal_mapping" value="1.0" />
             </bsdf>
             <bsdf name="diffuse_brdf" model="lambertian_brdf">
@@ -142,23 +142,16 @@
             <material name="sheen_mat2" model="generic_material">
                 <parameter name="bsdf" value="sheen_brdf" />
             </material>
-            <surface_shader name="__default_surface_shader" model="diagnostic_surface_shader">
-                <parameter name="mode" value="facing_ratio" />
-            </surface_shader>
-            <material name="__default_material" model="generic_material">
-                <parameter name="surface_shader" value="__default_surface_shader" />
-            </material>
-            <material name="__null_material" model="generic_material" />
             <light name="Lamp" model="point_light">
                 <parameter name="cast_indirect_light" value="true" />
                 <parameter name="exposure" value="0" />
                 <parameter name="importance_multiplier" value="1" />
                 <parameter name="intensity" value="Lamp_radiance" /> <!-- Lamp_radiance -->
-                <parameter name="intensity_multiplier" value="2" /> <!-- 11 -->
+                <parameter name="intensity_multiplier" value="1" /> <!-- 11 -->
                 <transform>
                     <matrix>
                         1.000000000000000 0.000000000000000 0.000000000000000 -1.000000000000000
-                        0.000000000000000 1.000000000000000 0.000000000000000 -1.00000000000000
+                        0.000000000000000 1.000000000000000 0.000000000000000 0.00000000000000
                         0.000000000000000 0.000000000000000 1.000000000000000 1.00000000000000
                         0.000000000000000 0.000000000000000 0.000000000000000 1.000000000000000
                     </matrix>
