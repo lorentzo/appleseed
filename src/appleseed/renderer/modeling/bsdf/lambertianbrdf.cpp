@@ -78,7 +78,6 @@ namespace
         {
             m_inputs.declare("reflectance", InputFormatSpectralReflectance);
             m_inputs.declare("reflectance_multiplier", InputFormatFloat, "1.0");
-            m_inputs.declare("microfacet_normal_mapping", InputFormatFloat, "0.0");
         }
 
         void release() override
@@ -226,22 +225,6 @@ DictionaryArray LambertianBRDFFactory::get_input_metadata() const
                 Dictionary().insert("texture_instance", "Texture Instances"))
             .insert("use", "optional")
             .insert("default", "1.0"));
-
-    metadata.push_back(
-        Dictionary()
-            .insert("name", "microfacet_normal_mapping")
-            .insert("label", "Microfacet Normal Mapping")
-            .insert("type", "numeric")
-            .insert("min",
-                Dictionary()
-                    .insert("value", "0.0")
-                    .insert("type", "hard"))
-            .insert("max",
-                Dictionary()
-                    .insert("value", "1.0")
-                    .insert("type", "hard"))
-            .insert("use", "optional")
-            .insert("default", "0.0"));
 
     return metadata;
 }
